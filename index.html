@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lesson 5. Writing</title>
+<title>Inference Writing Helper v11</title>
 <style>
 :root{--bg:#f3f5f7;--card:#fff;--ink:#20242a;--muted:#667085;--line:#d8dde3;--dark:#30353b;--soft:#eef1f4;--good:#eef4ef;--warn:#f6f2e9}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Noto Sans KR",Arial,sans-serif;line-height:1.55}
@@ -78,13 +78,32 @@ function hint(content){
 
 function norm(s){
   return s.toLowerCase()
-    .replace(/[.,!?;:'"]/g,' ')
+    // 스마트 따옴표도 일반 아포스트로피로 통일
+    .replace(/[’‘]/g,"'")
+    // 아포스트로피를 지우기 전에 축약형부터 처리
+    .replace(/\bdoesn't\b/g,'does not')
+    .replace(/\bdon't\b/g,'do not')
+    .replace(/\bdidn't\b/g,'did not')
+    .replace(/\bisn't\b/g,'is not')
+    .replace(/\baren't\b/g,'are not')
+    .replace(/\bwasn't\b/g,'was not')
+    .replace(/\bweren't\b/g,'were not')
+    .replace(/\bcan't\b/g,'cannot')
+    .replace(/\bcouldn't\b/g,'could not')
+    .replace(/\bwon't\b/g,'will not')
+    // 아포스트로피 없이 입력한 형태도 허용
     .replace(/\bdoesnt\b/g,'does not')
+    .replace(/\bdont\b/g,'do not')
     .replace(/\bdidnt\b/g,'did not')
     .replace(/\bisnt\b/g,'is not')
+    .replace(/\barent\b/g,'are not')
     .replace(/\bwasnt\b/g,'was not')
+    .replace(/\bwerent\b/g,'were not')
     .replace(/\bcant\b/g,'cannot')
     .replace(/\bcouldnt\b/g,'could not')
+    .replace(/\bwont\b/g,'will not')
+    // 마지막에 문장부호 제거
+    .replace(/[.,!?;:'"]/g,' ')
     .replace(/\s+/g,' ')
     .trim();
 }
