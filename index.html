@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lesson 5. Writing</title>
+<title>Inference Writing Helper v14</title>
 <style>
 :root{--bg:#f3f5f7;--card:#fff;--ink:#20242a;--muted:#667085;--line:#d8dde3;--dark:#30353b;--soft:#eef1f4;--good:#eef4ef;--warn:#f6f2e9}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Noto Sans KR",Arial,sans-serif;line-height:1.55}
@@ -480,13 +480,14 @@ function minorIssues(s,raw){
   return [...new Set(issues)];
 }
 
-// 의미가 맞고 작은 오류만 있을 때는 한 번에 딱 한 곳만 알려 준다.
+// 의미가 맞고 작은 오류만 있을 때는 작은 오류를 한 번에 모두 알려 준다.
 function giveOneSmallCorrection(s,raw){
   const issues=minorIssues(s,raw);
   if(!issues.length) return false;
 
-  msg(`거의 다 맞았어. <b>딱 한 곳만</b> 고쳐 보자.<br><br>👉 ${issues[0]}<br><br>그 부분만 고쳐서 문장을 다시 써 줘.`,'bot',true);
-  status.textContent='지적한 한 부분만 고쳐서 다시 써 보세요.';
+  const list=issues.map((x,i)=>`${i+1}. ${x}`).join('<br>');
+  msg(`거의 다 맞았어. <b>작은 오류 ${issues.length}개</b>만 한 번에 고쳐 보자.<br><br>${list}<br><br>위 부분을 모두 고쳐서 문장을 한 번만 다시 써 줘.`,'bot',true);
+  status.textContent='지적한 부분을 모두 고쳐서 한 번만 다시 써 보세요.';
   return true;
 }
 
@@ -717,7 +718,7 @@ function send(){
     const s=meta[revisionTarget].stage;
 
     if(okFor(s,raw)){
-      // 수정 단계에서도 한 번에 한 오류만
+      // 수정 단계에서도 작은 오류를 한 번에 모두
       if(giveOneSmallCorrection(s,raw)) return;
 
       sentences[revisionTarget]=raw.trim();
@@ -747,7 +748,7 @@ function send(){
 
   // 1) 먼저 의미만 판정
   if(okFor(stage,raw)){
-    // 2) 의미가 맞으면 작은 오류는 전체 문장 힌트 대신 딱 한 곳만 지적
+    // 2) 의미가 맞으면 작은 오류는 전체 문장 힌트 대신 작은 오류를 모두 지적
     if(giveOneSmallCorrection(stage,raw)) return;
 
     msg('좋아. 의미도 맞고 표현도 잘 썼어.');
