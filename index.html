@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lesson 5. Writing</title>
+<title>Inference Writing Helper v6</title>
 <style>
 :root{--bg:#f3f5f7;--card:#fff;--ink:#20242a;--muted:#667085;--line:#d8dde3;--dark:#30353b;--soft:#eef1f4;--good:#eef4ef;--warn:#f6f2e9}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Noto Sans KR",Arial,sans-serif;line-height:1.55}
@@ -51,16 +51,106 @@ let stage='diag1', attempts=0, helpLevel=0, diagScore=0, chosen='', reasonNotes=
 let reasons={height:false,glasses:false,hoodie:false}, sentences=[], meta=[], revisionTarget=-1, revisedCount=0, reviewRounds=0;
 const stageNo={diag1:1,diag2:2,situation:3,choose:4,why:4,whyMore:4,reconsider:4,inference:5,e1:6,e2:7,e3:8,conclusion:9,review:10,revise:10,moreRevision:10,finalReady:10,done:10};
 const phaseName={diag1:'Quick Writing Check',diag2:'Quick Writing Check',situation:'Situation',choose:'Think First',why:'Think First',whyMore:'Think First',reconsider:'Think Again',inference:'Inference',e1:'Evidence + Elimination Reasoning',e2:'Evidence + Elimination Reasoning',e3:'Evidence + Elimination Reasoning',conclusion:'Conclusion',review:'Review & Revise',revise:'Review & Revise',moreRevision:'Review & Revise',finalReady:'Final Check',done:'완성'};
-function norm(s){return s.toLowerCase().replace(/[.,!?;:'"]/g,'').replace(/\s+/g,' ').trim().replace(/doesnt/g,"doesn't").replace(/isnt/g,"isn't");}
-function any(t,a){return a.some(x=>t.includes(x));} function shuffle(a){let x=[...a];for(let i=x.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]];}return x;}
-function msg(text,who='bot',html=false,extra=''){let r=document.createElement('div');r.className='msg '+who+(extra?' '+extra:'');let b=document.createElement('div');b.className='bubble';html?b.innerHTML=text:b.textContent=text;r.appendChild(b);chat.appendChild(r);chat.scrollTop=chat.scrollHeight;return r;}
-function hint(h){msg('<div class="hintbox">'+h+'</div>','bot',true);} function upd(){let n=stageNo[stage]||0;phase.textContent=phaseName[stage]||'';num.textContent=n+' / 10';bar.style.width=(n/10*100)+'%';}
-function suspect(raw){let t=norm(raw);if(t.includes('alex'))return'Alex';if(t.includes('ben'))return'Ben';if(t.includes('chris'))return'Chris';if(t.includes('daniel'))return'Daniel';return'';}
+
+function norm(s){
+  return s.toLowerCase()
+    .replace(/[.,!?;:'"]/g,' ')
+    .replace(/\bdoesnt\b/g,'does not')
+    .replace(/\bdidnt\b/g,'did not')
+    .replace(/\bisnt\b/g,'is not')
+    .replace(/\bwasnt\b/g,'was not')
+    .replace(/\bcant\b/g,'cannot')
+    .replace(/\bcouldnt\b/g,'could not')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+function any(t,a){return a.some(x=>t.includes(x));}
+function shuffle(a){let x=[...a];for(let i=x.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]];}return x;}
+
+function lev(a,b){
+  const m=a.length,n=b.length,dp=Array.from({length:m+1},()=>Array(n+1).fill(0));
+  for(let i=0;i<=m;i++)dp[i][0]=i;
+  for(let j=0;j<=n;j++)dp[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){
+    dp[i][j]=Math.min(dp[i-1][j]+1,dp[i][j-1]+1,dp[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+  }
+  return dp[m][n];
+}
+function toks(t){return norm(t).split(' ').filter(Boolean);}
+function nearWord(t,target){
+  const max=target.length>=8?2:(target.length>=5?1:0);
+  return toks(t).some(w=>w===target||(max>0&&Math.abs(w.length-target.length)<=max&&lev(w,target)<=max));
+}
+function hasName(t,n){return norm(t).includes(n.toLowerCase());}
+function hasCriminalWord(t){t=norm(t);return nearWord(t,'criminal')||nearWord(t,'culprit')||t.includes('the person')||t.includes('the one');}
+function hasBreakIdea(t){t=norm(t);return nearWord(t,'break')||nearWord(t,'broke')||nearWord(t,'broken')||t.includes('did it');}
+function hasWindow(t){return nearWord(norm(t),'window');}
+
+function heightAbove(t){
+  t=norm(t);
+  if(any(t,['over 165','above 165','more than 165','greater than 165']))return true;
+  if((nearWord(t,'taller')||t.includes('tall'))&&t.includes('165'))return true;
+  const nums=(t.match(/\b\d{3}\b/g)||[]).map(Number);
+  return nums.some(x=>x>165);
+}
+function heightBelow(t){
+  t=norm(t);
+  if(any(t,['under 165','below 165','less than 165']))return true;
+  if((nearWord(t,'shorter')||t.includes('short'))&&t.includes('165'))return true;
+  const nums=(t.match(/\b\d{3}\b/g)||[]).map(Number);
+  return nums.some(x=>x<165);
+}
+function wearsGlasses(t){
+  t=norm(t);
+  if(any(t,['no glasses','without glasses','not wearing glasses','does not wear glasses','did not wear glasses','does not have glasses','did not have glasses']))return false;
+  return nearWord(t,'glasses')||nearWord(t,'eyeglasses');
+}
+function noGlasses(t){
+  t=norm(t);
+  return any(t,['no glasses','without glasses','not wearing glasses','does not wear glasses','did not wear glasses','does not have glasses','did not have glasses']);
+}
+function stripedHoodie(t){
+  t=norm(t);
+  return (nearWord(t,'striped')||t.includes('with stripes'))&&(nearWord(t,'hoodie')||t.includes('hooded sweatshirt'));
+}
+function notStripedHoodie(t){
+  t=norm(t);
+  return any(t,['plain hoodie','not striped','no stripes','without stripes','not wearing a striped hoodie','does not wear a striped hoodie','did not wear a striped hoodie']);
+}
+function eliminated(t){
+  t=norm(t);
+  return any(t,[
+    'not the criminal','not criminal','cannot be the criminal','cannot be criminal',
+    'could not be the criminal','is not the criminal','is not criminal',
+    'not the person','cannot be the person','not the one','cannot be the one',
+    'did not do it','not him','rule out','ruled out'
+  ]);
+}
+function inferenceIdea(t,name){
+  t=norm(t);
+  return hasName(t,name)&&(
+    hasCriminalWord(t)||hasBreakIdea(t)
+  );
+}
+function conclusionIdea(t,name){
+  t=norm(t);
+  return hasName(t,name)&&(hasCriminalWord(t)||hasBreakIdea(t));
+}
+
+function suspect(raw){
+  let t=norm(raw);
+  if(t.includes('alex'))return'Alex';
+  if(t.includes('ben'))return'Ben';
+  if(t.includes('chris'))return'Chris';
+  if(t.includes('daniel'))return'Daniel';
+  return'';
+}
 const matchData={Alex:{height:false,glasses:true,hoodie:true},Ben:{height:true,glasses:false,hoodie:true},Chris:{height:true,glasses:true,hoodie:false},Daniel:{height:true,glasses:true,hoodie:true}};
 function detectReasons(raw){let t=norm(raw);if(any(t,['165','160','168','170','172','tall','taller','short','shorter','height','키','크다','작다','큼','작음']))reasons.height=true;if(any(t,['glass','glasses','안경']))reasons.glasses=true;if(any(t,['stripe','striped','plain','hoodie','줄무늬','민무늬','후드']))reasons.hoodie=true;}
-function reasonCount(){return (reasons.height?1:0)+(reasons.glasses?1:0)+(reasons.hoodie?1:0);} function missingReasons(){let a=[];if(!reasons.height)a.push('키');if(!reasons.glasses)a.push('안경');if(!reasons.hoodie)a.push('줄무늬 후드티');return a;}
+function reasonCount(){return (reasons.height?1:0)+(reasons.glasses?1:0)+(reasons.hoodie?1:0);}
+function missingReasons(){let a=[];if(!reasons.height)a.push('키');if(!reasons.glasses)a.push('안경');if(!reasons.hoodie)a.push('줄무늬 후드티');return a;}
 function mismatch(name){let d=matchData[name];if(!d.height)return{ko:'키',detail:`${name}의 키는 165 cm보다 작아.`};if(!d.glasses)return{ko:'안경',detail:`${name}은(는) 안경을 쓰고 있지 않아.`};if(!d.hoodie)return{ko:'줄무늬 후드티',detail:`${name}은(는) 민무늬 후드티를 입고 있어.`};return null;}
-function reasonFactError(name,raw){let t=norm(raw),d=matchData[name];if(any(t,['165보다 크','165 cm보다 크','taller'])&&!d.height)return`${name}의 키는 165 cm보다 작아.`;if(any(t,['165보다 작','165 cm보다 작','shorter'])&&d.height)return`${name}의 키는 165 cm보다 커.`;if(any(t,['wear glasses','wears glasses','안경을 쓴','안경 쓴'])&&!d.glasses)return`${name}은(는) 안경을 쓰고 있지 않아.`;if(any(t,["doesn't wear glasses",'does not wear glasses','안경을 쓰지'])&&d.glasses)return`${name}은(는) 안경을 쓰고 있어.`;if(any(t,['striped hoodie','줄무늬 후드'])&&!d.hoodie)return`${name}은(는) 민무늬 후드티를 입고 있어.`;if(any(t,['plain hoodie','민무늬 후드'])&&d.hoodie)return`${name}은(는) 줄무늬 후드티를 입고 있어.`;return'';}
+function reasonFactError(name,raw){let t=norm(raw),d=matchData[name];if(any(t,['165보다 크','165 cm보다 크','taller'])&&!d.height)return`${name}의 키는 165 cm보다 작아.`;if(any(t,['165보다 작','165 cm보다 작','shorter'])&&d.height)return`${name}의 키는 165 cm보다 커.`;if(any(t,['wear glasses','wears glasses','안경을 쓴','안경 쓴'])&&!d.glasses)return`${name}은(는) 안경을 쓰고 있지 않아.`;if(any(t,['does not wear glasses','안경을 쓰지'])&&d.glasses)return`${name}은(는) 안경을 쓰고 있어.`;if(any(t,['striped hoodie','줄무늬 후드'])&&!d.hoodie)return`${name}은(는) 민무늬 후드티를 입고 있어.`;if(any(t,['plain hoodie','민무늬 후드'])&&d.hoodie)return`${name}은(는) 줄무늬 후드티를 입고 있어.`;return'';}
 function supportObj(s=stage){
 if(s==='diag1')return{base:['Alex','be','short','Ben'],frame:'Alex is ______ than Ben.',pieces:['than','Alex','Ben','shorter','is']};
 if(s==='diag2')return{base:['Ben','wear','glasses'],frame:'Ben ______ wear ______.',pieces:['glasses',"doesn't",'Ben','wear']};
@@ -68,19 +158,19 @@ if(s==='situation')return{base:['yesterday','after lunch','someone','break','cla
 if(s==='inference')return{base:['I think',chosen,'criminal'],frame:`I think ${chosen} is the ______.`,pieces:['the criminal',chosen,'I think','is']};
 
 if(s==='e1')return{
-  base:['criminal','be','tall','165 cm','Alex','be','short','165 cm','so','not','criminal'],
-  frame:'The criminal was ______ than 165 cm. Alex is ______ than 165 cm, so he is not the criminal.',
-  pieces:['so he is not the criminal','Alex is shorter than 165 cm','The criminal was taller than 165 cm']
+  base:['criminal','be','tall','165 cm','Alex','be','short','165 cm','so','cannot','criminal'],
+  frame:'The criminal was ______ than 165 cm. Alex is ______ than 165 cm, so he cannot be the criminal.',
+  pieces:['so he cannot be the criminal','Alex is shorter than 165 cm','The criminal was taller than 165 cm']
 };
 if(s==='e2')return{
-  base:['criminal','wear','glasses','Ben','not','wear','glasses','so','not','criminal'],
-  frame:"The criminal was wearing ______. Ben doesn't wear ______, so he is not the criminal.",
-  pieces:["Ben doesn't wear glasses","so he is not the criminal","The criminal was wearing glasses"]
+  base:['criminal','wear','glasses','Ben','not','wear','glasses','This means','not','criminal'],
+  frame:"The criminal was wearing ______. Ben doesn't wear ______. This means Ben is not the criminal.",
+  pieces:["This means Ben is not the criminal","Ben doesn't wear glasses","The criminal was wearing glasses"]
 };
 if(s==='e3')return{
-  base:['criminal','wear','striped hoodie','Chris','not','wear','striped hoodie','so','not','criminal'],
-  frame:"The criminal was wearing a ______ hoodie. Chris isn't wearing a ______ hoodie, so he is not the criminal.",
-  pieces:["so he is not the criminal","The criminal was wearing a striped hoodie","Chris isn't wearing a striped hoodie"]
+  base:['criminal','wear','striped hoodie','Chris','wear','plain hoodie','For this reason','cannot','criminal'],
+  frame:"The criminal was wearing a ______ hoodie. Chris is wearing a ______ hoodie. For this reason, he cannot be the criminal.",
+  pieces:["For this reason, he cannot be the criminal","Chris is wearing a plain hoodie","The criminal was wearing a striped hoodie"]
 };
 if(s==='conclusion')return{
   base:['Therefore',chosen,'be','criminal'],
@@ -95,36 +185,139 @@ if(s==='diag1'){if(!t.includes('shorter'))return'두 사람을 비교하므로 <
 if(s==='diag2'){if(!t.includes('wear'))return'‘안경을 쓰다’는 <b>wear glasses</b>야.';return'일반동사의 부정문을 생각해 봐. Ben은 한 사람이야.';}
 if(s==='situation'){if(!t.includes('broke'))return'사건은 어제 일어났어. <b>break</b>의 과거형이 필요해.';return'“누군가 + 깨뜨렸다 + 교실 창문을”의 영어 어순을 확인해 봐.';}
 if(s==='inference')return`네가 선택한 사람은 <b>${chosen}</b>이야. <b>I think + 사람 + is the criminal</b>의 형태로 써 볼 수 있어.`;
-if(s==='e1')return`먼저 목격자의 <b>키 조건</b>을 쓰고, Alex의 키와 비교해서 Alex를 소거해야 해. <b>taller than / shorter than / so</b>를 활용해 봐.`;
-if(s==='e2')return`먼저 목격자의 <b>안경 조건</b>을 쓰고, Ben과 비교해서 Ben을 소거해 봐. <b>wear glasses / doesn't wear glasses / so</b>를 활용할 수 있어.`;
-if(s==='e3')return`먼저 목격자의 <b>줄무늬 후드티 조건</b>을 쓰고, Chris와 비교해서 Chris를 소거해 봐. <b>striped hoodie / isn't wearing / so</b>를 활용할 수 있어.`;
+if(s==='e1')return`먼저 목격자의 <b>키 조건</b>을 쓰고 Alex와 비교해 소거해 보자. 첫 번째 근거에서는 <b>so + cannot be</b>를 활용해 볼 수 있어.`;
+if(s==='e2')return`이번에는 같은 <b>so</b>를 반복하지 않아도 돼. 안경 조건을 비교한 뒤 <b>This means ...</b>으로 판단을 이어 볼 수 있어.`;
+if(s==='e3')return`마지막 근거도 같은 문장 모양을 반복할 필요는 없어. <b>plain hoodie</b>로 비교하고 <b>For this reason, ...</b>으로 소거해 볼 수 있어.`;
 if(s==='conclusion')return`Alex, Ben, Chris가 모두 소거되었으므로 마지막에 남은 <b>${chosen}</b>으로 결론을 내리면 돼. <b>Therefore,</b>를 활용해 봐.`;
 return'';
 }
 function okFor(s,raw){
-let t=norm(raw);
-if(s==='diag1')return t.includes('alex')&&t.includes('is')&&t.includes('shorter')&&t.includes('than')&&t.includes('ben');
-if(s==='diag2')return t.includes('ben')&&t.includes('wear')&&t.includes('glasses')&&any(t,["doesn't",'does not']);
-if(s==='situation')return t.includes('someone')&&t.includes('broke')&&t.includes('window');
-if(s==='inference')return t.includes(chosen.toLowerCase())&&t.includes('think')&&t.includes('criminal');
+  let t=norm(raw);
 
-if(s==='e1')
-  return t.includes('criminal')&&t.includes('taller')&&t.includes('165')&&
-         t.includes('alex')&&t.includes('shorter')&&
-         any(t,['so','therefore'])&&any(t,['not the criminal',"isn't the criminal"]);
+  if(s==='diag1'){
+    return hasName(t,'Alex')&&hasName(t,'Ben')&&(
+      nearWord(t,'shorter')||t.includes('less tall')||t.includes('not as tall')
+    );
+  }
 
-if(s==='e2')
-  return t.includes('criminal')&&t.includes('wear')&&t.includes('glasses')&&
-         t.includes('ben')&&any(t,["doesn't wear",'does not wear'])&&
-         any(t,['so','therefore'])&&any(t,['not the criminal',"isn't the criminal"]);
+  if(s==='diag2'){
+    return hasName(t,'Ben')&&noGlasses(t);
+  }
 
-if(s==='e3')
-  return t.includes('criminal')&&t.includes('striped')&&t.includes('hoodie')&&
-         t.includes('chris')&&any(t,["isn't wearing",'is not wearing',"doesn't wear",'does not wear'])&&
-         any(t,['so','therefore'])&&any(t,['not the criminal',"isn't the criminal"]);
+  if(s==='situation'){
+    return hasWindow(t)&&hasBreakIdea(t);
+  }
 
-if(s==='conclusion')return t.includes(chosen.toLowerCase())&&t.includes('criminal')&&any(t,['therefore','so','for these reasons']);
-return true;
+  if(s==='inference'){
+    return inferenceIdea(t,chosen);
+  }
+
+  if(s==='e1'){
+    const parts=t.split('alex');
+    if(parts.length<2)return false;
+    const criminalPart=parts[0], alexPart='alex '+parts.slice(1).join('alex');
+    return hasCriminalWord(criminalPart)&&heightAbove(criminalPart)&&
+           heightBelow(alexPart)&&eliminated(alexPart);
+  }
+
+  if(s==='e2'){
+    const parts=t.split('ben');
+    if(parts.length<2)return false;
+    const criminalPart=parts[0], benPart='ben '+parts.slice(1).join('ben');
+    return hasCriminalWord(criminalPart)&&wearsGlasses(criminalPart)&&
+           noGlasses(benPart)&&eliminated(benPart);
+  }
+
+  if(s==='e3'){
+    const parts=t.split('chris');
+    if(parts.length<2)return false;
+    const criminalPart=parts[0], chrisPart='chris '+parts.slice(1).join('chris');
+    return hasCriminalWord(criminalPart)&&stripedHoodie(criminalPart)&&
+           notStripedHoodie(chrisPart)&&eliminated(chrisPart);
+  }
+
+  if(s==='conclusion'){
+    return conclusionIdea(t,chosen);
+  }
+
+  return true;
+}
+
+function connectorType(raw){
+  const t=norm(raw);
+  if(t.includes('this means'))return'this means';
+  if(t.includes('for this reason'))return'for this reason';
+  if(t.includes('therefore'))return'therefore';
+  if(t.includes('so'))return'so';
+  return'';
+}
+function repeatedEliminationStyle(s,raw){
+  if(!['e2','e3'].includes(s))return'';
+  const current=connectorType(raw);
+  if(!current)return'';
+  const idxMap={e2:2,e3:3};
+  const prevIndex=idxMap[s]-1;
+  if(prevIndex>=0&&sentences[prevIndex]){
+    const prev=connectorType(sentences[prevIndex]);
+    if(prev&&prev===current)return`앞 근거에서도 <b>${current}</b>를 썼어. 틀린 것은 아니지만, 최종 글에서는 다른 연결 표현으로 바꾸면 더 자연스러워.`;
+  }
+  return'';
+}
+function repeatedEndingCount(){
+  const es=[];
+  [2,3,4].forEach(i=>{if(sentences[i]){const c=connectorType(sentences[i]);if(c)es.push(c);}});
+  const counts={};es.forEach(x=>counts[x]=(counts[x]||0)+1);
+  return Object.entries(counts).filter(([k,v])=>v>=2).map(([k])=>k);
+}
+function minorIssues(s,raw){
+  const issues=[],t=raw.trim(),n=norm(raw);
+  if(t&&/^[a-z]/.test(t))issues.push('문장 첫 글자 대문자');
+  if(t&&!/[.!?]$/.test(t))issues.push('문장 끝 마침표');
+
+  if(hasCriminalWord(n)&&nearWord(n,'criminal')&&!n.includes('the criminal')&&!n.includes('a criminal')){
+    issues.push('criminal 앞의 관사');
+  }
+
+  if(s==='situation'&&nearWord(n,'break')&&!nearWord(n,'broke')&&!nearWord(n,'broken')){
+    issues.push('과거형 broke');
+  }
+
+  if(s==='diag1'||s==='e1'){
+    if(n.includes('alex')&&nearWord(n,'shorter')&&!any(n,['alex is shorter','alex was shorter'])){
+      issues.push('Alex 뒤의 be동사');
+    }
+  }
+
+  if(s==='e2'){
+    if(n.includes('ben')&&noGlasses(n)&&!any(n,['ben does not','ben did not','ben is not','ben has no','ben without'])){
+      issues.push('Ben 부정문 형태');
+    }
+  }
+
+  return [...new Set(issues)];
+}
+function acceptFeedback(s,raw){
+  const issues=minorIssues(s,raw);
+  const styleNote=repeatedEliminationStyle(s,raw);
+  if(issues.length||styleNote){
+    let text='좋아. <b>의미는 충분히 전달돼서 다음 단계로 넘어갈 수 있어.</b>';
+    if(issues.length)text+=`<br><br>${issues.join(', ')} 같은 작은 표현은 마지막 수정 단계에서 다시 확인하자.`;
+    if(styleNote)text+=`<br><br>💡 ${styleNote}`;
+    msg(text,'bot',true);
+  }else{
+    msg('좋아. 필요한 의미가 잘 들어가 있어.');
+  }
+}
+function recommendSentence(){
+  for(let i=0;i<sentences.length;i++){
+    if(minorIssues(meta[i].stage,sentences[i]).length)return i;
+  }
+  let best=0,bestScore=-1;
+  meta.forEach((m,i)=>{
+    const score=(m.attempts||0)*2+(m.help||0);
+    if(score>bestScore){best=i;bestScore=score;}
+  });
+  return best;
 }
 function showHelp(){if(['choose','why','whyMore','reconsider'].includes(stage)){hint('영어로 이유를 쓸 필요는 없어. <b>키 / 안경 / 줄무늬 후드티</b>를 목격자 진술과 하나씩 비교해 봐. 한국어로 말해도 돼.');return;}if(stage==='review'||stage==='moreRevision'){hint('초고에서 가장 어렵게 썼던 문장이나, 다시 읽었을 때 어색한 문장을 고르면 좋아. 잘 모르겠으면 <b>추천</b>이라고 입력해.');return;}let s=supportObj(stage==='revise'?meta[revisionTarget].stage:stage);if(!s)return;let local=Math.min(4,(stage==='revise'?1:helpLevel+1));if(stage!=='revise')helpLevel=local;if(local===1)hint(targetHint(stage==='revise'?meta[revisionTarget].stage:stage));else if(local===2)hint('기본형 단어가 섞여 있어. 필요한 형태로 바꾸고 알맞은 순서를 생각해 봐.<div class="words">'+shuffle(s.base).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');else if(local===3)hint('문장틀을 이용해 볼 수 있어.<br><span class="frame">'+s.frame+'</span>');else hint('필요한 표현이 섞여 있어. 알맞은 순서로 배열해 봐.<div class="words">'+shuffle(s.pieces).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');}
 function wrong(raw,s=stage){attempts++;let sup=supportObj(s);if(attempts===1)hint(targetHint(s,raw));else if(attempts===2&&sup)hint('기본형 단어를 섞어서 줄게. 필요한 형태로 바꾸고 알맞은 순서로 써 봐.<div class="words">'+shuffle(sup.base).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');else if(attempts===3&&sup)hint('이번에는 문장틀을 이용해 보자.<br><span class="frame">'+sup.frame+'</span>');else if(sup)hint('필요한 표현이 섞여 있어. 알맞은 순서로 배열해 봐.<div class="words">'+shuffle(sup.pieces).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');}
@@ -172,9 +365,9 @@ if(stage==='e1')
 
 ① 목격자 진술: 범인은 165cm보다 키가 컸다.
 ② Alex: Alex는 165cm보다 키가 작다.
-③ 판단: 그래서 Alex는 범인이 아니다.
+③ 판단: 그래서 Alex는 범인이 될 수 없다.
 
-이 내용을 영어로 써 봐.`);
+첫 번째 근거에서는 <b>so</b>를 사용해도 좋아. 이 내용을 영어로 써 봐.`,'bot',true);
 
 if(stage==='e2')
   msg(`ELIMINATION 2 — GLASSES
@@ -182,19 +375,19 @@ if(stage==='e2')
 
 ① 목격자 진술: 범인은 안경을 쓰고 있었다.
 ② Ben: Ben은 안경을 쓰지 않는다.
-③ 판단: 그래서 Ben은 범인이 아니다.
+③ 판단: 이 말은 Ben이 범인이 아니라는 뜻이다.
 
-이 내용을 영어로 써 봐.`);
+이번에는 <b>This means ...</b>처럼 앞 문장과 다른 표현을 사용해 봐도 좋아.`,'bot',true);
 
 if(stage==='e3')
   msg(`ELIMINATION 3 — HOODIE
 마지막으로 Chris를 확인해 보자.
 
 ① 목격자 진술: 범인은 줄무늬 후드티를 입고 있었다.
-② Chris: Chris는 줄무늬 후드티를 입고 있지 않다.
-③ 판단: 그래서 Chris는 범인이 아니다.
+② Chris: Chris는 민무늬 후드티를 입고 있다.
+③ 판단: 이런 이유로 Chris는 범인이 될 수 없다.
 
-이 내용을 영어로 써 봐.`);
+마지막 근거에서는 <b>For this reason, ...</b>처럼 또 다른 표현을 사용해 봐도 좋아.`,'bot',true);
 
 if(stage==='conclusion')
   msg(`CONCLUSION
@@ -213,14 +406,107 @@ if(helpLevel>=2&&supportObj()){
 }
 status.textContent='먼저 네 힘으로 써 보세요.';
 }
-function reviewTips(i){let s=meta[i].stage,txt=sentences[i],tips=[];if(txt&&txt[0]===txt[0].toLowerCase())tips.push('문장 첫 글자를 대문자로 썼는지 확인');if(!/[.!?]$/.test(txt.trim()))tips.push('문장 끝 마침표 확인');if(s==='situation')tips.push('과거 사건이므로 broke 같은 과거형 확인');if(s==='inference')tips.push('I think / probably처럼 추론을 나타내는 표현 확인');if(['e1','e2','e3'].includes(s))tips.push('목격자 조건 → 용의자 정보 비교 → so + 소거 판단의 순서가 드러나는지 확인');if(s==='conclusion')tips.push('Therefore 등 결론을 나타내는 표현 확인');return tips;}
-function showDraftReview(){stage='review';upd();msg('초고가 완성됐어. 이제 바로 Final로 가지 않고, 먼저 <b>수정 과정</b>을 거칠 거야.','bot',true);let lines=sentences.map((s,i)=>`<div class="sentenceLine"><span class="sentenceNo">${i+1}</span>${s}</div>`).join('');msg(`<div class="draftBox"><h3>My First Draft</h3>${lines}</div><div class="checkBox"><b>Quick Check</b><br>✓ Situation<br>✓ Inference<br>✓ Elimination Reasoning 3개<br>✓ Conclusion<br><br>이제 <b>대문자·마침표·연결어·표현의 정확성</b>을 다시 확인해 보자.</div>`,'bot',true);msg('최소 한 문장은 반드시 다시 읽고 수정 여부를 판단해야 해.\n\n고치고 싶은 문장 번호 1~6을 입력해. 잘 모르겠으면 “추천”이라고 입력해.');status.textContent='문장 번호 또는 “추천”을 입력하세요.';}
+function reviewTips(i){
+  let s=meta[i].stage,txt=sentences[i],tips=minorIssues(s,txt);
+
+  if(s==='situation')tips.push('사건이 일어난 사실이 분명히 전달되는지 확인');
+  if(s==='inference')tips.push('내가 누구를 범인이라고 추론했는지 분명한지 확인');
+  if(s==='e1')tips.push('범인의 키 조건 → Alex의 키 → Alex 소거가 모두 드러나는지 확인');
+  if(s==='e2')tips.push('범인의 안경 조건 → Ben의 정보 → Ben 소거가 모두 드러나는지 확인');
+  if(s==='e3')tips.push('범인의 후드티 조건 → Chris의 정보 → Chris 소거가 모두 드러나는지 확인');
+  if(['e1','e2','e3'].includes(s))tips.push('앞 근거와 똑같은 연결 표현을 반복하고 있지 않은지 확인');
+  if(s==='conclusion')tips.push('최종적으로 남은 용의자가 분명한지 확인');
+
+  return [...new Set(tips)];
+}
+function showDraftReview(){stage='review';upd();msg('초고가 완성됐어. 이제 바로 Final로 가지 않고, 먼저 <b>수정 과정</b>을 거칠 거야.','bot',true);let lines=sentences.map((s,i)=>`<div class="sentenceLine"><span class="sentenceNo">${i+1}</span>${s}</div>`).join('');msg(`<div class="draftBox"><h3>My First Draft</h3>${lines}</div><div class="checkBox"><b>Quick Check</b><br>✓ Situation<br>✓ Inference<br>✓ Elimination Reasoning 3개<br>✓ Conclusion<br><br><b>표현 반복도 확인!</b><br>so ... / This means ... / For this reason, ... / Therefore, ...<br><br>이제 <b>대문자·마침표·연결어·표현의 정확성</b>을 다시 확인해 보자.</div>`,'bot',true);msg('최소 한 문장은 반드시 다시 읽고 수정 여부를 판단해야 해.\n\n고치고 싶은 문장 번호 1~6을 입력해. 잘 모르겠으면 “추천”이라고 입력해.');status.textContent='문장 번호 또는 “추천”을 입력하세요.';}
 function startRevision(i){revisionTarget=i;stage='revise';attempts=0;upd();let tips=reviewTips(i);msg(`문장 ${i+1}을 다시 보자.\n\n현재 문장:\n${sentences[i]}\n\n확인할 점:\n- ${tips.join('\n- ')}\n\n더 정확하고 자연스럽게 다시 써 봐. 이미 충분히 좋다고 판단하면 “그대로”라고 입력해.`);status.textContent='수정 문장을 쓰거나 “그대로”라고 입력하세요.';}
 function moreRevisionPrompt(){stage='moreRevision';upd();msg('수정 판단을 한 번 완료했어. 한 문장을 더 고치고 싶으면 1~6 중 번호를 입력해.\n이제 Final Draft로 가려면 “완료”라고 입력해.');status.textContent='문장 번호 또는 “완료”를 입력하세요.';}
-function finalCheck(){stage='finalReady';upd();let missingPunc=[];sentences.forEach((s,i)=>{if(!/[.!?]$/.test(s.trim()))missingPunc.push(i+1)});if(missingPunc.length){msg(`<div class="warnBox"><b>마지막 확인</b><br>문장 ${missingPunc.join(', ')}의 끝에 마침표가 있는지 다시 확인해 봐. 필요하면 문장 번호를 입력해 수정할 수 있어.</div>`,'bot',true);msg('수정하려면 문장 번호를 입력하고, 그대로 최종본을 만들려면 “최종완료”라고 입력해.');}else{msg('<div class="checkBox"><b>Final Check 완료</b><br>✓ 추론 글의 5요소 확인<br>✓ 수정 과정 완료<br>✓ 문장 끝 표시 확인</div>','bot',true);msg('Final Draft를 만들려면 “최종완료”라고 입력해.');}status.textContent='문장 번호 또는 “최종완료”를 입력하세요.';}
+function finalCheck(){
+  stage='finalReady';upd();
+  const remaining=[];
+  const repeatedStyle=repeatedEndingCount();
+  sentences.forEach((sentence,i)=>{
+    const issues=minorIssues(meta[i].stage,sentence);
+    if(issues.length)remaining.push(`문장 ${i+1}: ${issues.join(', ')}`);
+  });
+
+  if(remaining.length||repeatedStyle.length){
+    let styleText=repeatedStyle.length?`<br><br><b>문체:</b> ${repeatedStyle.join(', ')} 표현이 반복돼. 틀린 것은 아니지만 다른 연결 표현으로 바꾸면 더 자연스러워.`:'';
+    msg(`<div class="warnBox"><b>마지막 표현 점검</b><br>${remaining.join('<br>')}${styleText}<br><br>이 항목들은 <b>의미를 틀리게 만드는 오류는 아니야.</b> 더 다듬고 싶다면 해당 문장 번호를 입력해 수정할 수 있어.</div>`,'bot',true);
+    msg('수정하려면 문장 번호를 입력하고, 지금 글로 Final Draft를 만들려면 “최종완료”라고 입력해.');
+  }else{
+    msg('<div class="checkBox"><b>Final Check 완료</b><br>✓ 추론 과정 확인<br>✓ 소거 근거 확인<br>✓ 수정 과정 완료</div>','bot',true);
+    msg('Final Draft를 만들려면 “최종완료”라고 입력해.');
+  }
+  status.textContent='문장 번호 또는 “최종완료”를 입력하세요.';
+}
 function showFinal(){stage='done';upd();$('composer').style.display='none';let text=sentences.join(' ');let row=msg(`<div class="final" id="captureCard"><div style="text-align:center"><span class="complete">Revision Complete ✓</span></div><h2>FINAL DRAFT</h2><h3>Who Broke the Classroom Window?</h3><div class="studentInfo"><div><label>Class<input id="classInput" type="text" placeholder="반"></label></div><div><label>No.<input id="noInput" type="text" placeholder="번호"></label></div><div><label>Name<input id="nameInput" type="text" placeholder="이름"></label></div></div><div class="finalText" id="finalText"></div><div class="captureOnly" style="text-align:center;margin-top:14px;font-weight:700">완료! 이 화면을 캡처하여 제출하세요.</div><div class="actions noCapture"><button id="captureBtn">캡처용 화면 보기</button><button id="copyBtn" class="secondary">글 복사하기</button></div><p class="mini noCapture">반·번호·이름을 입력한 뒤 ‘캡처용 화면 보기’를 누르고 FINAL DRAFT 전체가 보이도록 캡처해 제출하세요.</p></div>`,'bot',true,'finalMsg');$('finalText').textContent=text;$('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(text);$('copyBtn').textContent='복사했어요';}catch(e){alert('직접 선택해서 복사해 주세요.')}};$('captureBtn').onclick=()=>{document.documentElement.classList.add('captureMode');window.scrollTo(0,0);let back=document.createElement('button');back.textContent='편집 화면으로 돌아가기';back.className='secondary';back.id='backCapture';back.style.position='fixed';back.style.right='14px';back.style.bottom='14px';back.style.zIndex='9999';back.onclick=()=>{document.documentElement.classList.remove('captureMode');back.remove();};document.body.appendChild(back);};chat.scrollTop=chat.scrollHeight;}
-function advance(raw){if(stage==='diag1'){diagScore+=(attempts===0?2:attempts===1?1:0);stage='diag2';attempts=0;upd();msg('좋아. 한 문장만 더 확인해 볼게.');msg('② 다음 문장을 영어로 써 봐.\n\n“Ben은 안경을 쓰지 않는다.”');return;}if(stage==='diag2'){diagScore+=(attempts===0?2:attempts===1?1:0);helpLevel=diagScore>=4?0:diagScore>=2?1:2;msg(helpLevel===0?'기본 문장을 스스로 잘 만들고 있어. 먼저 혼자 써 보고 필요할 때만 힌트를 줄게.':helpLevel===1?'기본 문장을 만들 수 있어. 막히는 부분에서 작은 힌트를 줄게.':'문장을 한 단계씩 만들 수 있도록 기본형 단어와 문장틀을 더 자주 보여 줄게.');stage='situation';askStage();return;}if(stage==='situation'){addSentence('situation',raw);stage='choose';askStage();return;}if(stage==='choose'){let s=suspect(raw);if(!s){msg('Alex / Ben / Chris / Daniel 중 한 명의 이름을 써 줘.');return;}chosen=s;reasons={height:false,glasses:false,hoodie:false};reasonNotes='';stage='why';askStage();return;}if(stage==='why'||stage==='whyMore'){reasonNotes+=(reasonNotes?' ':'')+raw.trim();detectReasons(raw);let err=reasonFactError(chosen,raw);if(err){msg(`네가 말한 이유를 먼저 확인해 보자.\n\n${err}\n이 정보를 목격자 진술과 비교한 뒤 다시 생각해 보자.`);stage='reconsider';askStage();return;}if(chosen!=='Daniel'){let m=mismatch(chosen);msg(`네가 말한 이유 중 맞는 부분은 근거로 사용할 수 있어. 하지만 범인이라면 목격자의 세 조건을 모두 만족해야 해.\n\n${m.detail}\n이 ${m.ko} 조건까지 생각하면 선택을 다시 확인할 필요가 있을까?`);stage='reconsider';askStage();return;}if(reasonCount()<3){msg(`좋아. 지금 말한 이유는 실제 단서와 잘 맞아.\n\n추론을 더 탄탄하게 하려면 아직 확인하지 않은 ${missingReasons().join(', ')}도 맞는지 설명해 볼래?`);stage='whyMore';upd();return;}msg(`좋아. 네가 말한 이유가 목격자의 세 가지 진술과 모두 잘 연결돼 있어.\n\n${chosen}은(는) 키, 안경, 줄무늬 후드티 조건을 모두 만족한다고 판단했구나. 이제 네 생각을 영어 글로 옮겨 보자.`);stage='inference';askStage();return;}if(stage==='reconsider'){let s=suspect(raw);if(!s){msg('다시 생각한 뒤 Alex / Ben / Chris / Daniel 중 한 명의 이름을 써 줘.');return;}chosen=s;reasons={height:false,glasses:false,hoodie:false};reasonNotes='';stage='why';askStage();return;}addSentence(stage,raw);const order=['inference','e1','e2','e3','conclusion'];let i=order.indexOf(stage);if(i<order.length-1){stage=order[i+1];askStage();}else showDraftReview();}
-function send(){let raw=answer.value.trim();if(!raw)return;msg(raw,'user');answer.value='';if(['choose','why','whyMore','reconsider'].includes(stage)){advance(raw);return;}if(stage==='review'){let t=norm(raw),i=-1;if(t.includes('추천'))i=recommendSentence();else if(/^[1-6]$/.test(t))i=parseInt(t)-1;if(i<0){msg('1~6 중 문장 번호를 쓰거나 “추천”이라고 입력해.');return;}startRevision(i);return;}if(stage==='revise'){if(norm(raw)==='그대로'){revisedCount++;meta[revisionTarget].reviewed=true;msg('좋아. 다시 읽어 보고 이 문장은 그대로 두기로 결정했구나. 이것도 수정 과정의 중요한 판단이야.');moreRevisionPrompt();return;}let s=meta[revisionTarget].stage;if(okFor(s,raw)){sentences[revisionTarget]=raw.trim();meta[revisionTarget].revised=true;revisedCount++;msg('좋아. 수정한 문장이 필요한 의미를 잘 담고 있어. 초고의 문장을 이 문장으로 바꿨어.');moreRevisionPrompt();}else wrong(raw,s);return;}if(stage==='moreRevision'){let t=norm(raw);if(t==='완료'||t==='no'||t==='아니오'){finalCheck();return;}if(/^[1-6]$/.test(t)){startRevision(parseInt(t)-1);return;}msg('문장 번호 1~6을 입력하거나 “완료”라고 입력해.');return;}if(stage==='finalReady'){let t=norm(raw);if(t==='최종완료'||t==='final'||t==='완료'){showFinal();return;}if(/^[1-6]$/.test(t)){startRevision(parseInt(t)-1);return;}msg('수정하려면 1~6 중 문장 번호를, 최종본을 만들려면 “최종완료”라고 입력해.');return;}if(okFor(stage,raw)){msg('좋아. 필요한 의미가 잘 들어가 있어.');advance(raw);}else wrong(raw,stage);}
+function advance(raw){if(stage==='diag1'){diagScore+=(attempts===0?2:attempts===1?1:0);stage='diag2';attempts=0;upd();msg('좋아. 한 문장만 더 확인해 볼게.');msg('② 다음 문장을 영어로 써 봐.\n\n“Ben은 안경을 쓰지 않는다.”');return;}if(stage==='diag2'){diagScore+=(attempts===0?2:attempts===1?1:0);helpLevel=diagScore>=4?0:diagScore>=2?1:2;msg(helpLevel===0?'기본 문장을 스스로 잘 만들고 있어. 먼저 혼자 써 보고 필요할 때만 힌트를 줄게.':helpLevel===1?'기본 문장을 만들 수 있어. 막히는 부분에서 작은 힌트를 줄게.':'문장을 한 단계씩 만들 수 있도록 기본형 단어와 문장틀을 더 자주 보여 줄게.');stage='situation';askStage();return;}if(stage==='situation'){addSentence('situation',raw);stage='choose';askStage();return;}if(stage==='choose'){let s=suspect(raw);if(!s){msg('Alex / Ben / Chris / Daniel 중 한 명의 이름을 써 줘.');return;}chosen=s;reasons={height:false,glasses:false,hoodie:false};reasonNotes='';stage='why';askStage();return;}if(stage==='why'||stage==='whyMore'){reasonNotes+=(reasonNotes?' ':'')+raw.trim();detectReasons(raw);let err=reasonFactError(chosen,raw);if(err){msg(`네가 말한 이유를 먼저 확인해 보자.\n\n${err}\n이 정보를 목격자 진술과 비교한 뒤 다시 생각해 보자.`);stage='reconsider';askStage();return;}if(chosen!=='Daniel'){let m=mismatch(chosen);msg(`네가 말한 이유 중 맞는 부분은 근거로 사용할 수 있어. 하지만 범인이라면 목격자의 세 조건을 모두 만족해야 해.\n\n${m.detail}\n이 ${m.ko} 조건까지 생각하면 선택을 다시 확인할 필요가 있을까?`);stage='reconsider';askStage();return;}if(reasonCount()<3){msg(`좋아. 지금 말한 이유는 실제 단서와 잘 맞아.\n\n추론을 더 탄탄하게 하려면 아직 확인하지 않은 ${missingReasons().join(', ')}도 맞는지 설명해 볼래?`);stage='whyMore';upd();return;}msg(`좋아. 네가 말한 이유를 바탕으로 범인을 추론했구나.\n\n이제 글에서는 다른 용의자들이 목격자의 조건과 어떻게 다른지 하나씩 비교하여 소거하고, 마지막에 결론을 내리도록 해 보자.`);stage='inference';askStage();return;}if(stage==='reconsider'){let s=suspect(raw);if(!s){msg('다시 생각한 뒤 Alex / Ben / Chris / Daniel 중 한 명의 이름을 써 줘.');return;}chosen=s;reasons={height:false,glasses:false,hoodie:false};reasonNotes='';stage='why';askStage();return;}addSentence(stage,raw);const order=['inference','e1','e2','e3','conclusion'];let i=order.indexOf(stage);if(i<order.length-1){stage=order[i+1];askStage();}else showDraftReview();}
+function send(){
+  let raw=answer.value.trim();
+  if(!raw)return;
+  msg(raw,'user');
+  answer.value='';
+
+  if(['choose','why','whyMore','reconsider'].includes(stage)){
+    advance(raw);return;
+  }
+
+  if(stage==='review'){
+    let t=norm(raw),i=-1;
+    if(t.includes('추천'))i=recommendSentence();
+    else if(/^[1-6]$/.test(t))i=parseInt(t)-1;
+    if(i<0){msg('1~6 중 문장 번호를 쓰거나 “추천”이라고 입력해.');return;}
+    startRevision(i);return;
+  }
+
+  if(stage==='revise'){
+    if(norm(raw)==='그대로'){
+      revisedCount++;
+      meta[revisionTarget].reviewed=true;
+      msg('좋아. 다시 읽어 보고 이 문장은 그대로 두기로 결정했구나. 이것도 수정 과정의 중요한 판단이야.');
+      moreRevisionPrompt();return;
+    }
+    let s=meta[revisionTarget].stage;
+    if(okFor(s,raw)){
+      sentences[revisionTarget]=raw.trim();
+      meta[revisionTarget].revised=true;
+      revisedCount++;
+      const issues=minorIssues(s,raw);
+      if(issues.length){
+        msg(`좋아. <b>의미는 정확해서 수정 문장으로 인정할게.</b><br>아직 ${issues.join(', ')} 같은 작은 표현은 남아 있을 수 있지만, 원하면 나중에 한 번 더 다듬을 수 있어.`,'bot',true);
+      }else{
+        msg('좋아. 수정한 문장이 의미도 분명하고 표현도 잘 정리됐어.');
+      }
+      moreRevisionPrompt();
+    }else{
+      wrong(raw,s);
+    }
+    return;
+  }
+
+  if(stage==='moreRevision'){
+    let t=norm(raw);
+    if(t==='완료'||t==='no'||t==='아니오'){finalCheck();return;}
+    if(/^[1-6]$/.test(t)){startRevision(parseInt(t)-1);return;}
+    msg('문장 번호 1~6을 입력하거나 “완료”라고 입력해.');return;
+  }
+
+  if(stage==='finalReady'){
+    let t=norm(raw);
+    if(t==='최종완료'||t==='final'||t==='완료'){showFinal();return;}
+    if(/^[1-6]$/.test(t)){startRevision(parseInt(t)-1);return;}
+    msg('수정하려면 1~6 중 문장 번호를, 최종본을 만들려면 “최종완료”라고 입력해.');return;
+  }
+
+  if(okFor(stage,raw)){
+    acceptFeedback(stage,raw);
+    advance(raw);
+  }else{
+    wrong(raw,stage);
+  }
+}
 $('startBtn').onclick=()=>{$('start').style.display='none';$('chatScreen').style.display='flex';upd();msg('먼저 짧은 영작을 해 볼게. 이건 시험이 아니라 네가 어떤 도움을 받으면 좋은지 알아보기 위한 거야.');msg('① 다음 문장을 영어로 써 봐.\n\n“Alex는 Ben보다 키가 작다.”');answer.focus();};$('send').onclick=send;answer.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();send();}});$('help').onclick=showHelp;
 </script>
 </body></html>
