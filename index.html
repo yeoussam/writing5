@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lesson 5. Writing</title>
+<title>Inference Writing Helper v10</title>
 <style>
 :root{--bg:#f3f5f7;--card:#fff;--ink:#20242a;--muted:#667085;--line:#d8dde3;--dark:#30353b;--soft:#eef1f4;--good:#eef4ef;--warn:#f6f2e9}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Noto Sans KR",Arial,sans-serif;line-height:1.55}
@@ -51,6 +51,30 @@ let stage='diag1', attempts=0, helpLevel=0, diagScore=0, chosen='', reasonNotes=
 let reasons={height:false,glasses:false,hoodie:false}, sentences=[], meta=[], revisionTarget=-1, revisedCount=0, reviewRounds=0;
 const stageNo={diag1:1,diag2:2,situation:3,choose:4,why:4,whyMore:4,reconsider:4,inference:5,e1:6,e2:7,e3:8,conclusion:9,review:10,revise:10,moreRevision:10,finalReady:10,done:10};
 const phaseName={diag1:'Quick Writing Check',diag2:'Quick Writing Check',situation:'Situation',choose:'Think First',why:'Think First',whyMore:'Think First',reconsider:'Think Again',inference:'Inference',e1:'Evidence + Elimination Reasoning',e2:'Evidence + Elimination Reasoning',e3:'Evidence + Elimination Reasoning',conclusion:'Conclusion',review:'Review & Revise',revise:'Review & Revise',moreRevision:'Review & Revise',finalReady:'Final Check',done:'완성'};
+
+function upd(){
+  const n=stageNo[stage]||0;
+  phase.textContent=phaseName[stage]||'';
+  num.textContent=`${n} / 10`;
+  bar.style.width=`${(n/10)*100}%`;
+}
+
+function msg(text,who='bot',htmlMode=false){
+  const row=document.createElement('div');
+  row.className='msg '+who;
+  const bubble=document.createElement('div');
+  bubble.className='bubble';
+  if(htmlMode) bubble.innerHTML=text;
+  else bubble.textContent=text;
+  row.appendChild(bubble);
+  chat.appendChild(row);
+  chat.scrollTop=chat.scrollHeight;
+}
+
+function hint(content){
+  msg(`<div class="hintbox">${content}</div>`,'bot',true);
+}
+
 
 function norm(s){
   return s.toLowerCase()
