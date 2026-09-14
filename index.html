@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lesson 5. Think and Write</title>
+<title>Inference Writing Helper v6</title>
 <style>
 :root{--bg:#f3f5f7;--card:#fff;--ink:#20242a;--muted:#667085;--line:#d8dde3;--dark:#30353b;--soft:#eef1f4;--good:#eef4ef;--warn:#f6f2e9}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Noto Sans KR",Arial,sans-serif;line-height:1.55}
@@ -50,7 +50,7 @@ const $=id=>document.getElementById(id); const chat=$('chat'), answer=$('answer'
 let stage='diag1', attempts=0, helpLevel=0, diagScore=0, chosen='', reasonNotes='';
 let reasons={height:false,glasses:false,hoodie:false}, sentences=[], meta=[], revisionTarget=-1, revisedCount=0, reviewRounds=0;
 const stageNo={diag1:1,diag2:2,situation:3,choose:4,why:4,whyMore:4,reconsider:4,inference:5,e1:6,e2:7,e3:8,conclusion:9,review:10,revise:10,moreRevision:10,finalReady:10,done:10};
-const phaseName={diag1:'Quick Writing Check',diag2:'Quick Writing Check',situation:'Situation',choose:'Think First',why:'Think First',whyMore:'Think First',reconsider:'Think Again',inference:'Inference',e1:'Evidence + Reasoning',e2:'Evidence + Reasoning',e3:'Evidence + Reasoning',conclusion:'Conclusion',review:'Review & Revise',revise:'Review & Revise',moreRevision:'Review & Revise',finalReady:'Final Check',done:'완성'};
+const phaseName={diag1:'Quick Writing Check',diag2:'Quick Writing Check',situation:'Situation',choose:'Think First',why:'Think First',whyMore:'Think First',reconsider:'Think Again',inference:'Inference',e1:'Evidence + Elimination Reasoning',e2:'Evidence + Elimination Reasoning',e3:'Evidence + Elimination Reasoning',conclusion:'Conclusion',review:'Review & Revise',revise:'Review & Revise',moreRevision:'Review & Revise',finalReady:'Final Check',done:'완성'};
 function norm(s){return s.toLowerCase().replace(/[.,!?;:'"]/g,'').replace(/\s+/g,' ').trim().replace(/doesnt/g,"doesn't").replace(/isnt/g,"isn't");}
 function any(t,a){return a.some(x=>t.includes(x));} function shuffle(a){let x=[...a];for(let i=x.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[x[i],x[j]]=[x[j],x[i]];}return x;}
 function msg(text,who='bot',html=false,extra=''){let r=document.createElement('div');r.className='msg '+who+(extra?' '+extra:'');let b=document.createElement('div');b.className='bubble';html?b.innerHTML=text:b.textContent=text;r.appendChild(b);chat.appendChild(r);chat.scrollTop=chat.scrollHeight;return r;}
@@ -61,16 +61,160 @@ function detectReasons(raw){let t=norm(raw);if(any(t,['165','160','168','170','1
 function reasonCount(){return (reasons.height?1:0)+(reasons.glasses?1:0)+(reasons.hoodie?1:0);} function missingReasons(){let a=[];if(!reasons.height)a.push('키');if(!reasons.glasses)a.push('안경');if(!reasons.hoodie)a.push('줄무늬 후드티');return a;}
 function mismatch(name){let d=matchData[name];if(!d.height)return{ko:'키',detail:`${name}의 키는 165 cm보다 작아.`};if(!d.glasses)return{ko:'안경',detail:`${name}은(는) 안경을 쓰고 있지 않아.`};if(!d.hoodie)return{ko:'줄무늬 후드티',detail:`${name}은(는) 민무늬 후드티를 입고 있어.`};return null;}
 function reasonFactError(name,raw){let t=norm(raw),d=matchData[name];if(any(t,['165보다 크','165 cm보다 크','taller'])&&!d.height)return`${name}의 키는 165 cm보다 작아.`;if(any(t,['165보다 작','165 cm보다 작','shorter'])&&d.height)return`${name}의 키는 165 cm보다 커.`;if(any(t,['wear glasses','wears glasses','안경을 쓴','안경 쓴'])&&!d.glasses)return`${name}은(는) 안경을 쓰고 있지 않아.`;if(any(t,["doesn't wear glasses",'does not wear glasses','안경을 쓰지'])&&d.glasses)return`${name}은(는) 안경을 쓰고 있어.`;if(any(t,['striped hoodie','줄무늬 후드'])&&!d.hoodie)return`${name}은(는) 민무늬 후드티를 입고 있어.`;if(any(t,['plain hoodie','민무늬 후드'])&&d.hoodie)return`${name}은(는) 줄무늬 후드티를 입고 있어.`;return'';}
-function supportObj(s=stage){if(s==='diag1')return{base:['Alex','be','short','Ben'],frame:'Alex is ______ than Ben.',pieces:['than','Alex','Ben','shorter','is']};if(s==='diag2')return{base:['Ben','wear','glasses'],frame:'Ben ______ wear ______.',pieces:['glasses',"doesn't",'Ben','wear']};if(s==='situation')return{base:['yesterday','after lunch','someone','break','classroom','window'],frame:'Yesterday after lunch, someone ______ the classroom ______.',pieces:['the classroom window','someone','broke','Yesterday after lunch']};if(s==='inference')return{base:['I think',chosen,'probably','break','window'],frame:`I think ${chosen} probably ______ the window.`,pieces:['probably','the window',chosen,'I think','broke']};if(s==='e1')return{base:['First',chosen,'be','tall','165 cm','so','match','height clue'],frame:`First, ${chosen} is ______ than 165 cm, so this matches the ______ clue.`,pieces:['the height clue','First',chosen,'so this matches','than 165 cm','is taller']};if(s==='e2')return{base:['Second',chosen,'wear','glasses','so','match','eyewitness clue'],frame:`Second, ${chosen} ______ glasses, so this matches the eyewitness's clue.`,pieces:["the eyewitness's clue",'glasses','Second',chosen,'wears','so this matches']};if(s==='e3')return{base:['Lastly',chosen,'wear','striped hoodie','so','match','eyewitness clue'],frame:`Lastly, ${chosen} is wearing a ______ hoodie, so this matches the eyewitness's clue.`,pieces:['a striped hoodie',chosen,'so this matches',"the eyewitness's clue",'Lastly','is wearing']};if(s==='conclusion')return{base:['Therefore',chosen,'probably','break','window'],frame:`Therefore, ${chosen} probably ______ the window.`,pieces:['the window','Therefore',chosen,'broke','probably']};return null;}
-function targetHint(s,raw=''){let t=norm(raw);if(s==='diag1'){if(!t.includes('shorter'))return'두 사람을 비교하므로 <b>short</b>의 비교급을 생각해 봐.';if(!t.includes('than'))return'“~보다”를 나타내는 말이 필요해.';return'<b>주어 + be동사 + 비교급 + than + 비교 대상</b> 순서를 확인해 봐.';}if(s==='diag2'){if(!t.includes('wear'))return'‘안경을 쓰다’는 <b>wear glasses</b>야.';return'일반동사의 부정문을 생각해 봐. Ben은 한 사람이야.';}if(s==='situation'){if(!t.includes('broke'))return'사건은 어제 일어났어. <b>break</b>의 과거형이 필요해.';return'“누군가 + 깨뜨렸다 + 교실 창문을”의 영어 어순을 확인해 봐.';}if(s==='inference')return`네가 선택한 사람은 <b>${chosen}</b>이야. 추론이므로 <b>I think</b>나 <b>probably</b>를 사용할 수 있어.`;if(s==='e1')return`<b>키</b> 단서를 표현해 보자. 비교급 <b>taller than</b>을 활용할 수 있어.`;if(s==='e2')return`<b>안경</b> 단서를 표현해 보자. <b>wear glasses</b>를 활용할 수 있어.`;if(s==='e3')return`<b>줄무늬 후드티</b> 단서를 표현해 보자. <b>striped hoodie</b>를 활용할 수 있어.`;if(s==='conclusion')return'최종 결론이므로 <b>Therefore,</b>로 시작해 볼 수 있어.';return'';}
-function okFor(s,raw){let t=norm(raw);if(s==='diag1')return t.includes('alex')&&t.includes('is')&&t.includes('shorter')&&t.includes('than')&&t.includes('ben');if(s==='diag2')return t.includes('ben')&&t.includes('wear')&&t.includes('glasses')&&any(t,["doesn't",'does not']);if(s==='situation')return t.includes('someone')&&t.includes('broke')&&t.includes('window');if(s==='inference')return t.includes(chosen.toLowerCase())&&any(t,['think','probably','may','might'])&&any(t,['broke','person','criminal']);if(s==='e1')return t.includes(chosen.toLowerCase())&&any(t,['taller','165','172'])&&any(t,['so','match','clue','statement']);if(s==='e2')return (t.includes(chosen.toLowerCase())||t.includes('he'))&&t.includes('glass')&&any(t,['so','match','clue','statement']);if(s==='e3')return (t.includes(chosen.toLowerCase())||t.includes('he'))&&t.includes('striped')&&t.includes('hoodie')&&any(t,['so','match','clue','statement']);if(s==='conclusion')return t.includes(chosen.toLowerCase())&&any(t,['therefore','so','for these reasons'])&&any(t,['broke','person','criminal']);return true;}
+function supportObj(s=stage){
+if(s==='diag1')return{base:['Alex','be','short','Ben'],frame:'Alex is ______ than Ben.',pieces:['than','Alex','Ben','shorter','is']};
+if(s==='diag2')return{base:['Ben','wear','glasses'],frame:'Ben ______ wear ______.',pieces:['glasses',"doesn't",'Ben','wear']};
+if(s==='situation')return{base:['yesterday','after lunch','someone','break','classroom','window'],frame:'Yesterday after lunch, someone ______ the classroom ______.',pieces:['the classroom window','someone','broke','Yesterday after lunch']};
+if(s==='inference')return{base:['I think',chosen,'criminal'],frame:`I think ${chosen} is the ______.`,pieces:['the criminal',chosen,'I think','is']};
+
+if(s==='e1')return{
+  base:['criminal','be','tall','165 cm','Alex','be','short','165 cm','so','not','criminal'],
+  frame:'The criminal was ______ than 165 cm. Alex is ______ than 165 cm, so he is not the criminal.',
+  pieces:['so he is not the criminal','Alex is shorter than 165 cm','The criminal was taller than 165 cm']
+};
+if(s==='e2')return{
+  base:['criminal','wear','glasses','Ben','not','wear','glasses','so','not','criminal'],
+  frame:"The criminal was wearing ______. Ben doesn't wear ______, so he is not the criminal.",
+  pieces:["Ben doesn't wear glasses","so he is not the criminal","The criminal was wearing glasses"]
+};
+if(s==='e3')return{
+  base:['criminal','wear','striped hoodie','Chris','not','wear','striped hoodie','so','not','criminal'],
+  frame:"The criminal was wearing a ______ hoodie. Chris isn't wearing a ______ hoodie, so he is not the criminal.",
+  pieces:["so he is not the criminal","The criminal was wearing a striped hoodie","Chris isn't wearing a striped hoodie"]
+};
+if(s==='conclusion')return{
+  base:['Therefore',chosen,'be','criminal'],
+  frame:`Therefore, ${chosen} is the ______.`,
+  pieces:['the criminal','Therefore',chosen,'is']
+};
+return null;
+}
+function targetHint(s,raw=''){
+let t=norm(raw);
+if(s==='diag1'){if(!t.includes('shorter'))return'두 사람을 비교하므로 <b>short</b>의 비교급을 생각해 봐.';if(!t.includes('than'))return'“~보다”를 나타내는 말이 필요해.';return'<b>주어 + be동사 + 비교급 + than + 비교 대상</b> 순서를 확인해 봐.';}
+if(s==='diag2'){if(!t.includes('wear'))return'‘안경을 쓰다’는 <b>wear glasses</b>야.';return'일반동사의 부정문을 생각해 봐. Ben은 한 사람이야.';}
+if(s==='situation'){if(!t.includes('broke'))return'사건은 어제 일어났어. <b>break</b>의 과거형이 필요해.';return'“누군가 + 깨뜨렸다 + 교실 창문을”의 영어 어순을 확인해 봐.';}
+if(s==='inference')return`네가 선택한 사람은 <b>${chosen}</b>이야. <b>I think + 사람 + is the criminal</b>의 형태로 써 볼 수 있어.`;
+if(s==='e1')return`먼저 목격자의 <b>키 조건</b>을 쓰고, Alex의 키와 비교해서 Alex를 소거해야 해. <b>taller than / shorter than / so</b>를 활용해 봐.`;
+if(s==='e2')return`먼저 목격자의 <b>안경 조건</b>을 쓰고, Ben과 비교해서 Ben을 소거해 봐. <b>wear glasses / doesn't wear glasses / so</b>를 활용할 수 있어.`;
+if(s==='e3')return`먼저 목격자의 <b>줄무늬 후드티 조건</b>을 쓰고, Chris와 비교해서 Chris를 소거해 봐. <b>striped hoodie / isn't wearing / so</b>를 활용할 수 있어.`;
+if(s==='conclusion')return`Alex, Ben, Chris가 모두 소거되었으므로 마지막에 남은 <b>${chosen}</b>으로 결론을 내리면 돼. <b>Therefore,</b>를 활용해 봐.`;
+return'';
+}
+function okFor(s,raw){
+let t=norm(raw);
+if(s==='diag1')return t.includes('alex')&&t.includes('is')&&t.includes('shorter')&&t.includes('than')&&t.includes('ben');
+if(s==='diag2')return t.includes('ben')&&t.includes('wear')&&t.includes('glasses')&&any(t,["doesn't",'does not']);
+if(s==='situation')return t.includes('someone')&&t.includes('broke')&&t.includes('window');
+if(s==='inference')return t.includes(chosen.toLowerCase())&&t.includes('think')&&t.includes('criminal');
+
+if(s==='e1')
+  return t.includes('criminal')&&t.includes('taller')&&t.includes('165')&&
+         t.includes('alex')&&t.includes('shorter')&&
+         any(t,['so','therefore'])&&any(t,['not the criminal',"isn't the criminal"]);
+
+if(s==='e2')
+  return t.includes('criminal')&&t.includes('wear')&&t.includes('glasses')&&
+         t.includes('ben')&&any(t,["doesn't wear",'does not wear'])&&
+         any(t,['so','therefore'])&&any(t,['not the criminal',"isn't the criminal"]);
+
+if(s==='e3')
+  return t.includes('criminal')&&t.includes('striped')&&t.includes('hoodie')&&
+         t.includes('chris')&&any(t,["isn't wearing",'is not wearing',"doesn't wear",'does not wear'])&&
+         any(t,['so','therefore'])&&any(t,['not the criminal',"isn't the criminal"]);
+
+if(s==='conclusion')return t.includes(chosen.toLowerCase())&&t.includes('criminal')&&any(t,['therefore','so','for these reasons']);
+return true;
+}
 function showHelp(){if(['choose','why','whyMore','reconsider'].includes(stage)){hint('영어로 이유를 쓸 필요는 없어. <b>키 / 안경 / 줄무늬 후드티</b>를 목격자 진술과 하나씩 비교해 봐. 한국어로 말해도 돼.');return;}if(stage==='review'||stage==='moreRevision'){hint('초고에서 가장 어렵게 썼던 문장이나, 다시 읽었을 때 어색한 문장을 고르면 좋아. 잘 모르겠으면 <b>추천</b>이라고 입력해.');return;}let s=supportObj(stage==='revise'?meta[revisionTarget].stage:stage);if(!s)return;let local=Math.min(4,(stage==='revise'?1:helpLevel+1));if(stage!=='revise')helpLevel=local;if(local===1)hint(targetHint(stage==='revise'?meta[revisionTarget].stage:stage));else if(local===2)hint('기본형 단어가 섞여 있어. 필요한 형태로 바꾸고 알맞은 순서를 생각해 봐.<div class="words">'+shuffle(s.base).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');else if(local===3)hint('문장틀을 이용해 볼 수 있어.<br><span class="frame">'+s.frame+'</span>');else hint('필요한 표현이 섞여 있어. 알맞은 순서로 배열해 봐.<div class="words">'+shuffle(s.pieces).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');}
 function wrong(raw,s=stage){attempts++;let sup=supportObj(s);if(attempts===1)hint(targetHint(s,raw));else if(attempts===2&&sup)hint('기본형 단어를 섞어서 줄게. 필요한 형태로 바꾸고 알맞은 순서로 써 봐.<div class="words">'+shuffle(sup.base).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');else if(attempts===3&&sup)hint('이번에는 문장틀을 이용해 보자.<br><span class="frame">'+sup.frame+'</span>');else if(sup)hint('필요한 표현이 섞여 있어. 알맞은 순서로 배열해 봐.<div class="words">'+shuffle(sup.pieces).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');}
 function addSentence(s,raw){sentences.push(raw.trim());meta.push({stage:s,attempts:attempts,help:helpLevel});}
-function askStage(){attempts=0;upd();if(stage==='situation')msg('SITUATION\n먼저 사건을 한 문장으로 소개해 보자.\n\n“어제 점심시간 후 누군가 교실 창문을 깼다.”');if(stage==='choose')msg('THINK FIRST\n이제 영작하기 전에 먼저 추론해 보자.\n\n누가 교실 창문을 깼다고 생각해?\nAlex / Ben / Chris / Daniel 중 한 명의 이름을 써 줘.');if(stage==='why')msg(`왜 ${chosen}이(가) 범인이라고 생각해?\n\n영어로 쓰기 어려우면 한국어로 말해도 괜찮아. 목격자 진술에서 근거를 찾아 설명해 줘.`);if(stage==='whyMore')msg('좋은 시작이야. 추론을 더 탄탄하게 하려면 아직 말하지 않은 단서도 확인해 보자.\n\n다른 특징도 맞는지 설명해 줘.');if(stage==='reconsider')msg(`지금 확인한 정보를 바탕으로 다시 생각해 보자.\n\n누가 범인이라고 생각해? 이름을 다시 골라 써 줘.`);if(stage==='inference')msg(`INFERENCE\n좋아. 네가 선택한 사람과 근거를 바탕으로 추론 문장을 영어로 만들어 보자.\n\n네 생각: ${chosen}이(가) 범인일 가능성이 높다.\n\nI think 또는 probably 같은 표현을 활용해 봐.`);if(stage==='e1')msg(`EVIDENCE + REASONING 1\n‘키’에 대한 단서를 영어로 설명해 보자.\n\n${chosen}은(는) 165cm보다 키가 크고, 이 특징이 목격자의 진술과 맞는다.`);if(stage==='e2')msg(`EVIDENCE + REASONING 2\n이번에는 ‘안경’ 단서를 영어로 설명해 보자.\n\n${chosen}은(는) 안경을 쓰고 있고, 이 특징이 목격자의 진술과 맞는다.`);if(stage==='e3')msg(`EVIDENCE + REASONING 3\n마지막으로 ‘후드티’ 단서를 영어로 설명해 보자.\n\n${chosen}은(는) 줄무늬 후드티를 입고 있고, 이 특징이 목격자의 진술과 맞는다.`);if(stage==='conclusion')msg(`CONCLUSION\n앞의 근거를 바탕으로 마지막 결론을 영어로 써 보자.\n\n그러므로 ${chosen}이(가) 아마 창문을 깼을 것이다.`);if(['choose','why','whyMore','reconsider'].includes(stage)){status.textContent='먼저 생각을 말해 보세요. 한국어도 괜찮아요.';return;}if(helpLevel>=2&&supportObj()){let s=supportObj();hint('처음부터 기본형 단어를 조금 줄게. 단어는 섞여 있어.<div class="words">'+shuffle(s.base).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');}status.textContent='먼저 네 힘으로 써 보세요.';}
-function recommendSentence(){let best=0,bestScore=-1;meta.forEach((m,i)=>{let s=m.attempts*3+m.help+(m.stage.startsWith('e')?1:0);let txt=sentences[i]||'';if(txt&&txt[0]===txt[0].toLowerCase())s+=1;if(!/[.!?]$/.test(txt.trim()))s+=1;if(s>bestScore){bestScore=s;best=i;}});return best;}
-function reviewTips(i){let s=meta[i].stage,txt=sentences[i],tips=[];if(txt&&txt[0]===txt[0].toLowerCase())tips.push('문장 첫 글자를 대문자로 썼는지 확인');if(!/[.!?]$/.test(txt.trim()))tips.push('문장 끝 마침표 확인');if(s==='situation')tips.push('과거 사건이므로 broke 같은 과거형 확인');if(s==='inference')tips.push('I think / probably처럼 추론을 나타내는 표현 확인');if(['e1','e2','e3'].includes(s))tips.push('Evidence 뒤에 so 등을 이용한 Reasoning이 있는지 확인');if(s==='conclusion')tips.push('Therefore 등 결론을 나타내는 표현 확인');return tips;}
-function showDraftReview(){stage='review';upd();msg('초고가 완성됐어. 이제 바로 Final로 가지 않고, 먼저 <b>수정 과정</b>을 거칠 거야.','bot',true);let lines=sentences.map((s,i)=>`<div class="sentenceLine"><span class="sentenceNo">${i+1}</span>${s}</div>`).join('');msg(`<div class="draftBox"><h3>My First Draft</h3>${lines}</div><div class="checkBox"><b>Quick Check</b><br>✓ Situation<br>✓ Inference<br>✓ Evidence + Reasoning 3개<br>✓ Conclusion<br><br>이제 <b>대문자·마침표·연결어·표현의 정확성</b>을 다시 확인해 보자.</div>`,'bot',true);msg('최소 한 문장은 반드시 다시 읽고 수정 여부를 판단해야 해.\n\n고치고 싶은 문장 번호 1~6을 입력해. 잘 모르겠으면 “추천”이라고 입력해.');status.textContent='문장 번호 또는 “추천”을 입력하세요.';}
+function askStage(){
+attempts=0;upd();
+
+if(stage==='situation')
+  msg(`SITUATION
+먼저 사건을 한 문장으로 소개해 보자.
+
+“어제 점심시간 후 누군가 교실 창문을 깼다.”`);
+
+if(stage==='choose')
+  msg(`THINK FIRST
+이제 영작하기 전에 먼저 추론해 보자.
+
+누가 교실 창문을 깼다고 생각해?
+Alex / Ben / Chris / Daniel 중 한 명의 이름을 써 줘.`);
+
+if(stage==='why')
+  msg(`왜 ${chosen}이(가) 범인이라고 생각해?
+
+영어로 쓰기 어려우면 한국어로 말해도 괜찮아. 목격자 진술과 용의자 정보를 비교해서 설명해 줘.`);
+
+if(stage==='whyMore')
+  msg(`좋은 시작이야. 추론을 더 탄탄하게 하려면 다른 조건도 확인해 보자.
+
+목격자의 세 가지 조건과 네가 고른 용의자의 정보를 모두 비교해 봐.`);
+
+if(stage==='reconsider')
+  msg(`지금 확인한 정보를 바탕으로 다시 생각해 보자.
+
+누가 범인이라고 생각해? 이름을 다시 골라 써 줘.`);
+
+if(stage==='inference')
+  msg(`INFERENCE
+좋아. 이제 네 추론을 영어로 한 문장으로 써 보자.
+
+“나는 ${chosen}이(가) 범인이라고 생각한다.”`);
+
+if(stage==='e1')
+  msg(`ELIMINATION 1 — HEIGHT
+이제 범인이 맞는 이유를 직접 나열하기보다, 조건에 맞지 않는 용의자를 하나씩 소거해 보자.
+
+① 목격자 진술: 범인은 165cm보다 키가 컸다.
+② Alex: Alex는 165cm보다 키가 작다.
+③ 판단: 그래서 Alex는 범인이 아니다.
+
+이 내용을 영어로 써 봐.`);
+
+if(stage==='e2')
+  msg(`ELIMINATION 2 — GLASSES
+이번에는 Ben을 확인해 보자.
+
+① 목격자 진술: 범인은 안경을 쓰고 있었다.
+② Ben: Ben은 안경을 쓰지 않는다.
+③ 판단: 그래서 Ben은 범인이 아니다.
+
+이 내용을 영어로 써 봐.`);
+
+if(stage==='e3')
+  msg(`ELIMINATION 3 — HOODIE
+마지막으로 Chris를 확인해 보자.
+
+① 목격자 진술: 범인은 줄무늬 후드티를 입고 있었다.
+② Chris: Chris는 줄무늬 후드티를 입고 있지 않다.
+③ 판단: 그래서 Chris는 범인이 아니다.
+
+이 내용을 영어로 써 봐.`);
+
+if(stage==='conclusion')
+  msg(`CONCLUSION
+Alex, Ben, Chris가 모두 조건에 맞지 않아 소거되었어.
+
+“그러므로 ${chosen}이(가) 범인이다.”를 영어로 써 보자.`);
+
+if(['choose','why','whyMore','reconsider'].includes(stage)){
+  status.textContent='먼저 생각을 말해 보세요. 한국어도 괜찮아요.';
+  return;
+}
+
+if(helpLevel>=2&&supportObj()){
+  let s=supportObj();
+  hint('처음부터 기본형 단어를 조금 줄게. 단어는 섞여 있어.<div class="words">'+shuffle(s.base).map(x=>'<span class="word">'+x+'</span>').join('')+'</div>');
+}
+status.textContent='먼저 네 힘으로 써 보세요.';
+}
+function reviewTips(i){let s=meta[i].stage,txt=sentences[i],tips=[];if(txt&&txt[0]===txt[0].toLowerCase())tips.push('문장 첫 글자를 대문자로 썼는지 확인');if(!/[.!?]$/.test(txt.trim()))tips.push('문장 끝 마침표 확인');if(s==='situation')tips.push('과거 사건이므로 broke 같은 과거형 확인');if(s==='inference')tips.push('I think / probably처럼 추론을 나타내는 표현 확인');if(['e1','e2','e3'].includes(s))tips.push('목격자 조건 → 용의자 정보 비교 → so + 소거 판단의 순서가 드러나는지 확인');if(s==='conclusion')tips.push('Therefore 등 결론을 나타내는 표현 확인');return tips;}
+function showDraftReview(){stage='review';upd();msg('초고가 완성됐어. 이제 바로 Final로 가지 않고, 먼저 <b>수정 과정</b>을 거칠 거야.','bot',true);let lines=sentences.map((s,i)=>`<div class="sentenceLine"><span class="sentenceNo">${i+1}</span>${s}</div>`).join('');msg(`<div class="draftBox"><h3>My First Draft</h3>${lines}</div><div class="checkBox"><b>Quick Check</b><br>✓ Situation<br>✓ Inference<br>✓ Elimination Reasoning 3개<br>✓ Conclusion<br><br>이제 <b>대문자·마침표·연결어·표현의 정확성</b>을 다시 확인해 보자.</div>`,'bot',true);msg('최소 한 문장은 반드시 다시 읽고 수정 여부를 판단해야 해.\n\n고치고 싶은 문장 번호 1~6을 입력해. 잘 모르겠으면 “추천”이라고 입력해.');status.textContent='문장 번호 또는 “추천”을 입력하세요.';}
 function startRevision(i){revisionTarget=i;stage='revise';attempts=0;upd();let tips=reviewTips(i);msg(`문장 ${i+1}을 다시 보자.\n\n현재 문장:\n${sentences[i]}\n\n확인할 점:\n- ${tips.join('\n- ')}\n\n더 정확하고 자연스럽게 다시 써 봐. 이미 충분히 좋다고 판단하면 “그대로”라고 입력해.`);status.textContent='수정 문장을 쓰거나 “그대로”라고 입력하세요.';}
 function moreRevisionPrompt(){stage='moreRevision';upd();msg('수정 판단을 한 번 완료했어. 한 문장을 더 고치고 싶으면 1~6 중 번호를 입력해.\n이제 Final Draft로 가려면 “완료”라고 입력해.');status.textContent='문장 번호 또는 “완료”를 입력하세요.';}
 function finalCheck(){stage='finalReady';upd();let missingPunc=[];sentences.forEach((s,i)=>{if(!/[.!?]$/.test(s.trim()))missingPunc.push(i+1)});if(missingPunc.length){msg(`<div class="warnBox"><b>마지막 확인</b><br>문장 ${missingPunc.join(', ')}의 끝에 마침표가 있는지 다시 확인해 봐. 필요하면 문장 번호를 입력해 수정할 수 있어.</div>`,'bot',true);msg('수정하려면 문장 번호를 입력하고, 그대로 최종본을 만들려면 “최종완료”라고 입력해.');}else{msg('<div class="checkBox"><b>Final Check 완료</b><br>✓ 추론 글의 5요소 확인<br>✓ 수정 과정 완료<br>✓ 문장 끝 표시 확인</div>','bot',true);msg('Final Draft를 만들려면 “최종완료”라고 입력해.');}status.textContent='문장 번호 또는 “최종완료”를 입력하세요.';}
