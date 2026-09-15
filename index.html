@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lesson 5. Writing</title>
+<title>Inference Writing Helper v17</title>
 <style>
 :root{--bg:#f3f5f7;--card:#fff;--ink:#20242a;--muted:#667085;--line:#d8dde3;--dark:#30353b;--soft:#eef1f4;--good:#eef4ef;--warn:#f6f2e9}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Noto Sans KR",Arial,sans-serif;line-height:1.55}
@@ -52,7 +52,7 @@ let reasons={height:false,glasses:false,hoodie:false}, sentences=[], meta=[], re
 const stageNo={diag1:1,diag2:2,situation:3,choose:4,why:4,whyMore:4,reconsider:4,inference:5,e1:6,e2:7,e3:8,conclusion:9,review:10,revise:10,moreRevision:10,finalReady:10,done:10};
 const phaseName={diag1:'Quick Writing Check',diag2:'Quick Writing Check',situation:'Situation',choose:'Think First',why:'Think First',whyMore:'Think First',reconsider:'Think Again',inference:'Inference',e1:'Evidence + Elimination Reasoning',e2:'Evidence + Elimination Reasoning',e3:'Evidence + Elimination Reasoning',conclusion:'Conclusion',review:'Review & Revise',revise:'Review & Revise',moreRevision:'Review & Revise',finalReady:'Final Check',done:'완성'};
 
-const SAVE_KEY='inference_writing_helper_v16_progress';
+const SAVE_KEY='inference_writing_helper_v17_progress';
 let restoringProgress=false;
 
 function getDisplay(id, fallback=''){
@@ -62,7 +62,7 @@ function saveProgress(){
   if(restoringProgress) return;
   try{
     const state={
-      version:16,
+      version:17,
       stage,attempts,helpLevel,diagScore,chosen,reasonNotes,reasons,
       sentences,meta,revisionTarget,revisedCount,reviewRounds,
       chatHTML:chat.innerHTML,
@@ -110,7 +110,7 @@ function bindFinalControlsAfterRestore(){
 function restoreProgress(){
   let saved=null;
   try{saved=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');}catch(e){saved=null;}
-  if(!saved || saved.version!==16) return false;
+  if(!saved || saved.version!==17) return false;
 
   restoringProgress=true;
   stage=saved.stage||'diag1';
@@ -738,8 +738,130 @@ if(helpLevel>=2&&supportObj()){
 }
 status.textContent='먼저 네 힘으로 써 보세요.';
 }
+
+function spacingIssues(raw){
+  const issues=[];
+  const s=String(raw);
+
+  if(/\s{2,}/.test(s))
+    issues.push('단어 사이의 <b>불필요한 띄어쓰기</b>를 한 칸으로 고쳐 보자.');
+
+  if(/\s+[,.!?]/.test(s))
+    issues.push('마침표나 쉼표 <b>앞의 공백</b>을 지워 보자.');
+
+  const safe=s.replace(/\b[ap]\.m\./gi,'TIME');
+  if(/[.!?][A-Za-z]/.test(safe))
+    issues.push('문장부호 뒤에는 <b>한 칸 띄어쓰기</b>를 해 보자.');
+
+  const joined={
+    'inthe':'in the','thecriminal':'the criminal','isnot':'is not',
+    'doesnot':'does not','donot':'do not','cannotbe':'cannot be',
+    'couldnot':'could not','thismeans':'This means',
+    'forthis':'For this','thisreason':'this reason',
+    'forthisreason':'For this reason','afterlunch':'after lunch',
+    'classroomwindow':'classroom window','thewindow':'the window',
+    'wearingglasses':'wearing glasses','wearglasses':'wear glasses',
+    'stripedhoodie':'striped hoodie','plainhoodie':'plain hoodie',
+    'morethan':'more than','shorterthan':'shorter than',
+    'tallerthan':'taller than','ithink':'I think',
+    'thereforedaniel':'Therefore, Daniel','alexis':'Alex is',
+    'benis':'Ben is','chrisis':'Chris is','danielis':'Daniel is'
+  };
+
+  const compactTokens=s.toLowerCase()
+    .replace(/[.,!?;:'"’‘]/g,' ')
+    .split(/\s+/).filter(Boolean);
+
+  compactTokens.forEach(w=>{
+    if(joined[w]){
+      issues.push(`<b>${w}</b> → <b>${joined[w]}</b>처럼 단어를 띄어 써 보자.`);
+    }
+  });
+
+  return issues;
+}
+
+function stageSpellTargets(stage){
+  const map={
+    situation:['yesterday','after','lunch','someone','broke','classroom','window'],
+    inference:['think','daniel','criminal'],
+    e1:['criminal','taller','than','alex','shorter','cannot'],
+    e2:['criminal','wearing','glasses','ben','wear','means'],
+    e3:['criminal','wearing','striped','hoodie','chris','plain','reason','cannot'],
+    conclusion:['therefore','daniel','criminal']
+  };
+  return map[stage]||['criminal'];
+}
+
+function spellingIssues(stage,raw){
+  const issues=[];
+  const original=String(raw).toLowerCase().replace(/[’‘]/g,"'");
+
+  const contractionFixes=[
+    [/\bdoesnt\b/g,"doesn't"],[/\bdont\b/g,"don't"],
+    [/\bdidnt\b/g,"didn't"],[/\bisnt\b/g,"isn't"],
+    [/\barent\b/g,"aren't"],[/\bcant\b/g,"can't"],
+    [/\bcouldnt\b/g,"couldn't"]
+  ];
+  contractionFixes.forEach(([re,fix])=>{
+    if(re.test(original))
+      issues.push(`축약형의 철자를 확인해 보자: <b>${fix}</b>`);
+  });
+
+  const tokens=original.replace(/[^a-z']+/g,' ').split(/\s+/).filter(Boolean);
+  const targets=stageSpellTargets(stage);
+  const accepted=new Set([
+    ...targets,
+    'the','a','an','is','was','were','are','am','i','he','she','it',
+    'they','we','you','not','so','this','for','of','to','and','than',
+    'cm','does','do','did','can','could','be','has','have','had',
+    'wear','wears','wore','cannot','because','person','one'
+  ]);
+
+  tokens.forEach(w=>{
+    const clean=w.replace(/'/g,'');
+    if(accepted.has(w)||accepted.has(clean)) return;
+
+    let best=null,bestD=99;
+    targets.forEach(t=>{
+      const d=lev(clean,t);
+      if(d<bestD){best=t;bestD=d;}
+    });
+
+    if(best){
+      const limit=best.length>=8?2:(best.length>=5?1:0);
+      if(limit>0 && bestD>0 && bestD<=limit &&
+         Math.abs(clean.length-best.length)<=limit){
+        issues.push(
+          `<b>${w}</b>의 철자를 확인해 보자. 혹시 <b>${best}</b>를 쓰려고 했는지 확인해 봐.`
+        );
+      }
+    }
+  });
+
+  return issues;
+}
+
+function finalProofreadingIssues(stage,raw){
+  return [...new Set([
+    ...minorIssues(stage,raw),
+    ...spacingIssues(raw),
+    ...spellingIssues(stage,raw)
+  ])];
+}
+
+function allFinalProofreadingIssues(){
+  const found=[];
+  sentences.forEach((sentence,i)=>{
+    const stageName=meta[i] ? meta[i].stage : '';
+    const issues=finalProofreadingIssues(stageName,sentence);
+    if(issues.length) found.push({index:i,issues});
+  });
+  return found;
+}
+
 function reviewTips(i){
-  let s=meta[i].stage,txt=sentences[i],tips=minorIssues(s,txt);
+  let s=meta[i].stage,txt=sentences[i],tips=finalProofreadingIssues(s,txt);
 
   if(s==='situation')tips.push('사건이 일어난 사실이 분명히 전달되는지 확인');
   if(s==='inference')tips.push('내가 누구를 범인이라고 추론했는지 분명한지 확인');
@@ -751,27 +873,51 @@ function reviewTips(i){
 
   return [...new Set(tips)];
 }
-function showDraftReview(){stage='review';upd();msg('초고가 완성됐어. 이제 바로 Final로 가지 않고, 먼저 <b>수정 과정</b>을 거칠 거야.','bot',true);let lines=sentences.map((s,i)=>`<div class="sentenceLine"><span class="sentenceNo">${i+1}</span>${s}</div>`).join('');msg(`<div class="draftBox"><h3>My First Draft</h3>${lines}</div><div class="checkBox"><b>Quick Check</b><br>✓ Situation<br>✓ Inference<br>✓ Elimination Reasoning 3개<br>✓ Conclusion<br><br><b>표현 반복도 확인!</b><br>so ... / This means ... / For this reason, ... / Therefore, ...<br><br>이제 <b>대문자·마침표·연결어·표현의 정확성</b>을 다시 확인해 보자.</div>`,'bot',true);msg('최소 한 문장은 반드시 다시 읽고 수정 여부를 판단해야 해.\n\n고치고 싶은 문장 번호 1~6을 입력해. 잘 모르겠으면 “추천”이라고 입력해.');status.textContent='문장 번호 또는 “추천”을 입력하세요.';}
+function showDraftReview(){stage='review';upd();msg('초고가 완성됐어. 이제 바로 Final로 가지 않고, 먼저 <b>수정 과정</b>을 거칠 거야.','bot',true);let lines=sentences.map((s,i)=>`<div class="sentenceLine"><span class="sentenceNo">${i+1}</span>${s}</div>`).join('');msg(`<div class="draftBox"><h3>My First Draft</h3>${lines}</div><div class="checkBox"><b>Quick Check</b><br>✓ Situation<br>✓ Inference<br>✓ Elimination Reasoning 3개<br>✓ Conclusion<br><br><b>표현 반복도 확인!</b><br>so ... / This means ... / For this reason, ... / Therefore, ...<br><br>이제 <b>철자·띄어쓰기·대문자·마침표·연결어·표현의 정확성</b>을 다시 확인해 보자.</div>`,'bot',true);msg('최소 한 문장은 반드시 다시 읽고 수정 여부를 판단해야 해.\n\n고치고 싶은 문장 번호 1~6을 입력해. 잘 모르겠으면 “추천”이라고 입력해.');status.textContent='문장 번호 또는 “추천”을 입력하세요.';}
 function startRevision(i){revisionTarget=i;stage='revise';attempts=0;upd();let tips=reviewTips(i);msg(`문장 ${i+1}을 다시 보자.\n\n현재 문장:\n${sentences[i]}\n\n확인할 점:\n- ${tips.join('\n- ')}\n\n더 정확하고 자연스럽게 다시 써 봐. 이미 충분히 좋다고 판단하면 “그대로”라고 입력해.`);status.textContent='수정 문장을 쓰거나 “그대로”라고 입력하세요.';}
 function moreRevisionPrompt(){stage='moreRevision';upd();msg('수정 판단을 한 번 완료했어. 한 문장을 더 고치고 싶으면 1~6 중 번호를 입력해.\n이제 Final Draft로 가려면 “완료”라고 입력해.');status.textContent='문장 번호 또는 “완료”를 입력하세요.';}
 function finalCheck(){
   stage='finalReady';upd();
-  const remaining=[];
-  const repeatedStyle=repeatedEndingCount();
-  sentences.forEach((sentence,i)=>{
-    const issues=minorIssues(meta[i].stage,sentence);
-    if(issues.length)remaining.push(`문장 ${i+1}: ${issues.join(', ')}`);
-  });
 
-  if(remaining.length||repeatedStyle.length){
-    let styleText=repeatedStyle.length?`<br><br><b>문체:</b> ${repeatedStyle.join(', ')} 표현이 반복돼. 틀린 것은 아니지만 다른 연결 표현으로 바꾸면 더 자연스러워.`:'';
-    msg(`<div class="warnBox"><b>마지막 표현 점검</b><br>${remaining.join('<br>')}${styleText}<br><br>이 항목들은 <b>의미를 틀리게 만드는 오류는 아니야.</b> 더 다듬고 싶다면 해당 문장 번호를 입력해 수정할 수 있어.</div>`,'bot',true);
-    msg('수정하려면 문장 번호를 입력하고, 지금 글로 Final Draft를 만들려면 “최종완료”라고 입력해.');
-  }else{
-    msg('<div class="checkBox"><b>Final Check 완료</b><br>✓ 추론 과정 확인<br>✓ 소거 근거 확인<br>✓ 수정 과정 완료</div>','bot',true);
-    msg('Final Draft를 만들려면 “최종완료”라고 입력해.');
+  const hard=allFinalProofreadingIssues();
+  const repeatedStyle=repeatedEndingCount();
+
+  if(hard.length){
+    const rows=hard
+      .map(x=>`<b>문장 ${x.index+1}</b>: ${x.issues.join(' / ')}`)
+      .join('<br><br>');
+
+    msg(`<div class="warnBox">
+      <b>FINAL PROOFREADING — 수정이 꼭 필요해</b><br><br>
+      ${rows}<br><br>
+      초고에서는 의미를 중심으로 확인했지만,
+      <b>Final Draft에는 철자·띄어쓰기·대문자·문장부호 오류가 남아 있으면 안 돼.</b><br>
+      오류가 있는 문장 번호를 입력해서 고쳐 보자.
+      </div>`,'bot',true);
+
+    msg('위에 표시된 문장 번호를 입력해 수정해 줘. 오류를 모두 고치기 전에는 Final Draft를 만들 수 없어.');
+    status.textContent='오류가 있는 문장 번호를 입력하세요.';
+    return;
   }
-  status.textContent='문장 번호 또는 “최종완료”를 입력하세요.';
+
+  let styleText='';
+  if(repeatedStyle.length){
+    styleText=`<br><br>💡 <b>선택 점검:</b> ${repeatedStyle.join(', ')} 표현이 반복돼.
+    문법 오류는 아니므로 원하면 그대로 두어도 돼.`;
+  }
+
+  msg(`<div class="checkBox">
+    <b>Final Proofreading 완료</b><br>
+    ✓ 철자 확인<br>
+    ✓ 띄어쓰기 확인<br>
+    ✓ 대문자·문장부호 확인<br>
+    ✓ 추론 과정 확인<br>
+    ✓ 소거 근거 확인
+    ${styleText}
+    </div>`,'bot',true);
+
+  msg('이제 Final Draft를 만들려면 “최종완료”라고 입력해.');
+  status.textContent='“최종완료”를 입력하세요.';
 }
 function showFinal(){stage='done';upd();$('composer').style.display='none';let text=sentences.join(' ');let row=msg(`<div class="final" id="captureCard"><div style="text-align:center"><span class="complete">Revision Complete ✓</span></div><h2>FINAL DRAFT</h2><h3>Who Broke the Classroom Window?</h3><div class="studentInfo"><div><label>Class<input id="classInput" type="text" placeholder="반"></label></div><div><label>No.<input id="noInput" type="text" placeholder="번호"></label></div><div><label>Name<input id="nameInput" type="text" placeholder="이름"></label></div></div><div class="finalText" id="finalText"></div><div class="captureOnly" style="text-align:center;margin-top:14px;font-weight:700">완료! 이 화면을 캡처하여 제출하세요.</div><div class="actions noCapture"><button id="captureBtn">캡처용 화면 보기</button><button id="copyBtn" class="secondary">글 복사하기</button></div><p class="mini noCapture">반·번호·이름을 입력한 뒤 ‘캡처용 화면 보기’를 누르고 FINAL DRAFT 전체가 보이도록 캡처해 제출하세요.</p></div>`,'bot',true,'finalMsg');$('finalText').textContent=text;$('copyBtn').onclick=async()=>{try{await navigator.clipboard.writeText(text);$('copyBtn').textContent='복사했어요';}catch(e){alert('직접 선택해서 복사해 주세요.')}};$('captureBtn').onclick=()=>{document.documentElement.classList.add('captureMode');window.scrollTo(0,0);let back=document.createElement('button');back.textContent='편집 화면으로 돌아가기';back.className='secondary';back.id='backCapture';back.style.position='fixed';back.style.right='14px';back.style.bottom='14px';back.style.zIndex='9999';back.onclick=()=>{document.documentElement.classList.remove('captureMode');back.remove();};document.body.appendChild(back);};chat.scrollTop=chat.scrollHeight;}
 function advance(raw){if(stage==='diag1'){diagScore+=(attempts===0?2:attempts===1?1:0);stage='diag2';attempts=0;upd();msg('좋아. 한 문장만 더 확인해 볼게.');msg('② 다음 문장을 영어로 써 봐.\n\n“Ben은 안경을 쓰지 않는다.”');return;}if(stage==='diag2'){diagScore+=(attempts===0?2:attempts===1?1:0);helpLevel=diagScore>=4?0:diagScore>=2?1:2;msg(helpLevel===0?'기본 문장을 스스로 잘 만들고 있어. 먼저 혼자 써 보고 필요할 때만 힌트를 줄게.':helpLevel===1?'기본 문장을 만들 수 있어. 막히는 부분에서 작은 힌트를 줄게.':'문장을 한 단계씩 만들 수 있도록 기본형 단어와 문장틀을 더 자주 보여 줄게.');stage='situation';askStage();return;}if(stage==='situation'){addSentence('situation',raw);stage='choose';askStage();return;}if(stage==='choose'){let s=suspect(raw);if(!s){msg('Alex / Ben / Chris / Daniel 중 한 명의 이름을 써 줘.');return;}chosen=s;reasons={height:false,glasses:false,hoodie:false};reasonNotes='';stage='why';askStage();return;}if(stage==='why'||stage==='whyMore'){
@@ -931,6 +1077,21 @@ function send(){
 
   if(stage==='revise'){
     if(norm(raw)==='그대로'){
+      const hardIssues=finalProofreadingIssues(
+        meta[revisionTarget].stage,
+        sentences[revisionTarget]
+      );
+
+      if(hardIssues.length){
+        msg(`<b>이 문장은 그대로 둘 수 없어.</b><br><br>
+        ${hardIssues.map((x,i)=>`${i+1}. ${x}`).join('<br>')}
+        <br><br>Final Draft 전에 꼭 고쳐야 하는 부분이야.
+        수정한 문장을 다시 써 줘.`,'bot',true);
+
+        status.textContent='표시된 철자·띄어쓰기 등을 고쳐 다시 써 보세요.';
+        return;
+      }
+
       revisedCount++;
       meta[revisionTarget].reviewed=true;
       msg('좋아. 다시 읽어 보고 이 문장은 그대로 두기로 결정했구나.');
@@ -973,9 +1134,19 @@ function send(){
 
   if(stage==='finalReady'){
     let t=norm(raw);
-    if(t==='최종완료'||t==='final'||t==='완료'){showFinal();return;}
-    if(/^[1-6]$/.test(t)){startRevision(parseInt(t)-1);return;}
-    msg('수정하려면 1~6 중 문장 번호를, 최종본을 만들려면 “최종완료”라고 입력해.');return;
+
+    if(t==='최종완료'||t==='final'||t==='완료'){
+      const hard=allFinalProofreadingIssues();
+      if(hard.length){finalCheck();return;}
+      showFinal();return;
+    }
+
+    if(/^[1-6]$/.test(t)){
+      startRevision(parseInt(t)-1);return;
+    }
+
+    msg('수정하려면 1~6 중 문장 번호를, 철자·띄어쓰기 점검이 끝난 뒤 최종본을 만들려면 “최종완료”라고 입력해.');
+    return;
   }
 
   // 챗봇이 제공한 문장틀/배열의 정답을 그대로 올바르게 완성했다면 반드시 통과시킨다.
