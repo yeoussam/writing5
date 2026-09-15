@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lesson 5. Writing</title>
+<title>Inference Writing Helper v16</title>
 <style>
 :root{--bg:#f3f5f7;--card:#fff;--ink:#20242a;--muted:#667085;--line:#d8dde3;--dark:#30353b;--soft:#eef1f4;--good:#eef4ef;--warn:#f6f2e9}
 *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font-family:"Malgun Gothic","Noto Sans KR",Arial,sans-serif;line-height:1.55}
@@ -43,7 +43,7 @@ button{border:0;border-radius:10px;background:var(--dark);color:#fff;padding:11p
   <div class="progressWrap"><div class="progressText"><span id="phase">준비</span><span id="num">0 / 10</span></div><div class="progress"><div class="bar" id="bar"></div></div></div>
   <section id="start" class="start"><h2>먼저 생각하고, 쓰고, 고쳐 보자.</h2><p>짧은 영작으로 필요한 도움의 정도를 확인한 뒤, 초고를 쓰고 직접 수정해서 Final Draft까지 완성할 거야.</p>
   <div class="rules"><div class="rule"><b>1. 먼저 직접 시도</b><br>틀려도 괜찮아요.</div><div class="rule"><b>2. 필요한 만큼 도움</b><br>힌트 → 기본형 단어 → 문장틀 → 섞인 표현</div><div class="rule"><b>3. 반드시 수정하기</b><br>초고를 다시 읽고 최소 한 문장을 검토합니다.</div></div><button id="startBtn">시작하기</button></section>
-  <section id="chatScreen" style="display:none;flex:1;flex-direction:column"><div id="chat" class="chat"></div><div id="composer" class="composer"><div class="row"><input id="answer" type="text" autocomplete="off" placeholder="여기에 답을 써 보세요."><button id="send">보내기</button></div><div class="assist"><span class="mini" id="status">먼저 직접 써 보세요.</span><button id="help" class="secondary">힌트가 필요해요</button></div></div></section>
+  <section id="chatScreen" style="display:none;flex:1;flex-direction:column"><div id="chat" class="chat"></div><div id="composer" class="composer"><div class="row"><input id="answer" type="text" autocomplete="off" placeholder="여기에 답을 써 보세요."><button id="send">보내기</button></div><div class="assist"><span class="mini" id="status">먼저 직접 써 보세요.</span><div style="display:flex;gap:6px"><button id="help" class="secondary">힌트가 필요해요</button><button id="resetProgress" class="secondary">처음부터</button></div></div></div></section>
 </main></div></div>
 <script>
 const $=id=>document.getElementById(id); const chat=$('chat'), answer=$('answer'), status=$('status'), phase=$('phase'), num=$('num'), bar=$('bar');
@@ -52,11 +52,106 @@ let reasons={height:false,glasses:false,hoodie:false}, sentences=[], meta=[], re
 const stageNo={diag1:1,diag2:2,situation:3,choose:4,why:4,whyMore:4,reconsider:4,inference:5,e1:6,e2:7,e3:8,conclusion:9,review:10,revise:10,moreRevision:10,finalReady:10,done:10};
 const phaseName={diag1:'Quick Writing Check',diag2:'Quick Writing Check',situation:'Situation',choose:'Think First',why:'Think First',whyMore:'Think First',reconsider:'Think Again',inference:'Inference',e1:'Evidence + Elimination Reasoning',e2:'Evidence + Elimination Reasoning',e3:'Evidence + Elimination Reasoning',conclusion:'Conclusion',review:'Review & Revise',revise:'Review & Revise',moreRevision:'Review & Revise',finalReady:'Final Check',done:'완성'};
 
+const SAVE_KEY='inference_writing_helper_v16_progress';
+let restoringProgress=false;
+
+function getDisplay(id, fallback=''){
+  const el=$(id); return el ? (el.style.display||fallback) : fallback;
+}
+function saveProgress(){
+  if(restoringProgress) return;
+  try{
+    const state={
+      version:16,
+      stage,attempts,helpLevel,diagScore,chosen,reasonNotes,reasons,
+      sentences,meta,revisionTarget,revisedCount,reviewRounds,
+      chatHTML:chat.innerHTML,
+      answerValue:answer.value,
+      statusText:status.textContent,
+      startDisplay:getDisplay('start','block'),
+      chatDisplay:getDisplay('chatScreen','none'),
+      composerDisplay:getDisplay('composer','block'),
+      classValue:$('classInput')?$('classInput').value:'',
+      noValue:$('noInput')?$('noInput').value:'',
+      nameValue:$('nameInput')?$('nameInput').value:''
+    };
+    localStorage.setItem(SAVE_KEY,JSON.stringify(state));
+  }catch(e){}
+}
+function clearSavedProgress(){
+  try{localStorage.removeItem(SAVE_KEY);}catch(e){}
+}
+function bindFinalControlsAfterRestore(){
+  const copy=$('copyBtn');
+  if(copy){
+    copy.onclick=async()=>{
+      const text=sentences.join(' ');
+      try{await navigator.clipboard.writeText(text);copy.textContent='복사했어요';}
+      catch(e){alert('직접 선택해서 복사해 주세요.');}
+    };
+  }
+  const cap=$('captureBtn');
+  if(cap){
+    cap.onclick=()=>{
+      document.documentElement.classList.add('captureMode');window.scrollTo(0,0);
+      let back=document.createElement('button');
+      back.textContent='편집 화면으로 돌아가기';
+      back.className='secondary';
+      back.id='backCapture';
+      back.style.position='fixed';
+      back.style.right='14px';
+      back.style.bottom='14px';
+      back.style.zIndex='9999';
+      back.onclick=()=>{document.documentElement.classList.remove('captureMode');back.remove();};
+      document.body.appendChild(back);
+    };
+  }
+}
+function restoreProgress(){
+  let saved=null;
+  try{saved=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');}catch(e){saved=null;}
+  if(!saved || saved.version!==16) return false;
+
+  restoringProgress=true;
+  stage=saved.stage||'diag1';
+  attempts=saved.attempts||0;
+  helpLevel=saved.helpLevel||0;
+  diagScore=saved.diagScore||0;
+  chosen=saved.chosen||'';
+  reasonNotes=saved.reasonNotes||'';
+  reasons=saved.reasons||{height:false,glasses:false,hoodie:false};
+  sentences=Array.isArray(saved.sentences)?saved.sentences:[];
+  meta=Array.isArray(saved.meta)?saved.meta:[];
+  revisionTarget=Number.isInteger(saved.revisionTarget)?saved.revisionTarget:-1;
+  revisedCount=saved.revisedCount||0;
+  reviewRounds=saved.reviewRounds||0;
+
+  $('start').style.display=saved.startDisplay||'none';
+  $('chatScreen').style.display=saved.chatDisplay||'flex';
+  $('composer').style.display=saved.composerDisplay||'block';
+  chat.innerHTML=saved.chatHTML||'';
+  answer.value=saved.answerValue||'';
+  status.textContent=saved.statusText||'이전 진행 상황을 불러왔어요.';
+  upd();
+
+  if(stage==='done'){
+    if($('classInput'))$('classInput').value=saved.classValue||'';
+    if($('noInput'))$('noInput').value=saved.noValue||'';
+    if($('nameInput'))$('nameInput').value=saved.nameValue||'';
+    bindFinalControlsAfterRestore();
+  }
+  restoringProgress=false;
+  saveProgress();
+  return true;
+}
+
+
 function upd(){
   const n=stageNo[stage]||0;
   phase.textContent=phaseName[stage]||'';
   num.textContent=`${n} / 10`;
   bar.style.width=`${(n/10)*100}%`;
+  saveProgress();
 }
 
 function msg(text,who='bot',htmlMode=false){
@@ -69,6 +164,7 @@ function msg(text,who='bot',htmlMode=false){
   row.appendChild(bubble);
   chat.appendChild(row);
   chat.scrollTop=chat.scrollHeight;
+  saveProgress();
 }
 
 function hint(content){
@@ -334,7 +430,46 @@ if(s==='e3')return`마지막 근거도 같은 문장 모양을 반복할 필요�
 if(s==='conclusion')return`Alex, Ben, Chris가 모두 소거되었으므로 마지막에 남은 <b>${chosen}</b>으로 결론을 내리면 돼. <b>Therefore,</b>를 활용해 봐.`;
 return'';
 }
+
+function canonicalModels(s){
+  const name=chosen||'Daniel';
+  const models={
+    diag1:['Alex is shorter than Ben.'],
+    diag2:["Ben doesn't wear glasses.",'Ben does not wear glasses.'],
+    situation:[
+      'Yesterday after lunch, someone broke the classroom window.',
+      'Someone broke the classroom window yesterday after lunch.'
+    ],
+    inference:[
+      `I think ${name} is the criminal.`,
+      `I think ${name} broke the window.`
+    ],
+    e1:[
+      'The criminal was taller than 165 cm. Alex is shorter than 165 cm, so he cannot be the criminal.',
+      'The criminal was taller than 165 cm. Alex is shorter than 165 cm. So he cannot be the criminal.'
+    ],
+    e2:[
+      "The criminal was wearing glasses. Ben doesn't wear glasses. This means Ben is not the criminal.",
+      'The criminal was wearing glasses. Ben does not wear glasses. This means Ben is not the criminal.'
+    ],
+    e3:[
+      'The criminal was wearing a striped hoodie. Chris is wearing a plain hoodie. For this reason, he cannot be the criminal.',
+      'The criminal was wearing a striped hoodie. Chris is wearing a plain hoodie. For this reason, Chris cannot be the criminal.'
+    ],
+    conclusion:[
+      `Therefore, ${name} is the criminal.`,
+      `So, ${name} is the criminal.`
+    ]
+  };
+  return models[s]||[];
+}
+function canonicalMatch(s,raw){
+  const n=norm(raw);
+  return canonicalModels(s).some(model=>norm(model)===n);
+}
+
 function okFor(s,raw){
+  if(canonicalMatch(s,raw)) return true;
   const t=norm(raw);
 
   if(s==='diag1'){
@@ -688,11 +823,98 @@ function advance(raw){if(stage==='diag1'){diagScore+=(attempts===0?2:attempts===
   이제부터는 다른 용의자들을 하나씩 소거하는 방식으로 영어 글을 써 보자.`,'bot',true);
   stage='inference';askStage();return;
 }if(stage==='reconsider'){let s=suspect(raw);if(!s){msg('다시 생각한 뒤 Alex / Ben / Chris / Daniel 중 한 명의 이름을 써 줘.');return;}chosen=s;reasons={height:false,glasses:false,hoodie:false};reasonNotes='';stage='why';askStage();return;}addSentence(stage,raw);const order=['inference','e1','e2','e3','conclusion'];let i=order.indexOf(stage);if(i<order.length-1){stage=order[i+1];askStage();}else showDraftReview();}
+
+function socialIntent(raw){
+  const t=String(raw).trim().toLowerCase().replace(/[.!?~ㅎㅎㅋㅋㅠㅜ]+/g,'').trim();
+
+  if(/^(미안|미안해|미안해요|죄송|죄송해|죄송해요|내가 잘못 이해했어|내가 오해했어|오해했어)$/.test(t)) return 'apology';
+  if(/^(고마워|고마워요|감사|감사해|감사합니다|땡큐|thanks|thank you)$/.test(t)) return 'thanks';
+  if(/^(모르겠어|모르겠어요|잘 모르겠어|잘 모르겠어요|어려워|어려워요|못하겠어|못 하겠어|헷갈려|헷갈려요)$/.test(t)) return 'stuck';
+  if(/^(다시 설명해줘|다시 설명해 줘|다시 알려줘|다시 알려 줘|무슨 뜻이야|이해가 안돼|이해가 안 돼|설명해줘|설명해 줘)$/.test(t)) return 'explain';
+  if(/^(잠깐|잠깐만|기다려|기다려줘|잠시만)$/.test(t)) return 'pause';
+  if(/^(알겠어|알겠어요|이해했어|이해했어요|아하|아 그렇구나|그렇구나)$/.test(t)) return 'ack';
+  if(/^(싫어|하기 싫어|짜증나|답답해|화나|기분 나빠|기분나빠)$/.test(t)) return 'frustrated';
+
+  return null;
+}
+
+function currentTaskReminder(){
+  const reminders={
+    diag1:'지금은 “Alex는 Ben보다 키가 작다.”를 영어로 쓰는 중이야.',
+    diag2:'지금은 “Ben은 안경을 쓰지 않는다.”를 영어로 쓰는 중이야.',
+    situation:'지금은 사건 상황을 영어 한 문장으로 쓰는 중이야.',
+    choose:'지금은 누가 범인이라고 생각하는지 고르는 중이야.',
+    why:'지금은 왜 그렇게 생각하는지 근거를 말하는 중이야. 한국어로 말해도 돼.',
+    whyMore:'지금은 추론의 근거를 조금 더 확인하는 중이야. 한국어로 말해도 돼.',
+    reconsider:'지금은 확인한 정보를 바탕으로 범인을 다시 생각하는 중이야.',
+    inference:'지금은 네 추론을 영어 한 문장으로 쓰는 중이야.',
+    e1:'지금은 키 조건으로 Alex를 소거하는 부분을 쓰는 중이야.',
+    e2:'지금은 안경 조건으로 Ben을 소거하는 부분을 쓰는 중이야.',
+    e3:'지금은 후드티 조건으로 Chris를 소거하는 부분을 쓰는 중이야.',
+    conclusion:'지금은 마지막 결론을 쓰는 중이야.',
+    review:'지금은 초고에서 검토할 문장을 고르는 중이야.',
+    revise:'지금은 선택한 문장을 수정하는 중이야.',
+    moreRevision:'지금은 다른 문장도 더 수정할지 결정하는 중이야.',
+    finalReady:'지금은 Final Draft를 만들기 전 마지막 확인 단계야.'
+  };
+  return reminders[stage]||'지금 하던 부분부터 이어서 하면 돼.';
+}
+
+function simplerExplanation(){
+  if(stage==='choose') return '왼쪽 단서 3개와 네 명의 정보를 비교해서, 세 조건이 모두 맞는 사람을 고르면 돼.';
+  if(stage==='why'||stage==='whyMore') return '영어로 쓸 필요 없어. “키가 맞아요”, “안경을 써요”처럼 한국어로 근거를 말해도 돼.';
+  if(stage==='reconsider') return '방금 확인한 조건을 다시 보고, 처음 고른 사람이 정말 세 조건에 맞는지 생각해 보면 돼.';
+
+  const s=supportObj(stage);
+  if(s){
+    const base=shuffled(s.base||[]).map(w=>`<span class="word">${w}</span>`).join('');
+    return `지금은 아래 핵심 표현을 보고 문장을 직접 만들어 보면 돼.<div class="words">${base}</div>`;
+  }
+  return targetHint(stage,'') || currentTaskReminder();
+}
+
+function handleSocialInput(raw){
+  const intent=socialIntent(raw);
+  if(!intent) return false;
+
+  if(intent==='apology'){
+    msg('괜찮아. 피드백이 헷갈릴 수 있어. 지금 하던 부분부터 다시 이어가면 돼.');
+    msg(currentTaskReminder());
+  }else if(intent==='thanks'){
+    msg('천만에. 이어서 해 보자.');
+    msg(currentTaskReminder());
+  }else if(intent==='stuck'){
+    msg('어려운 부분이 있구나. 지금 단계에서 도움을 한 단계 더 줄게.');
+    showHelp();
+  }else if(intent==='explain'){
+    msg('좋아. 더 쉽게 다시 설명해 볼게.');
+    msg(simplerExplanation(),'bot',true);
+  }else if(intent==='pause'){
+    msg('알겠어. 준비되면 지금 하던 부분부터 이어서 입력하면 돼.');
+  }else if(intent==='ack'){
+    msg('좋아. 그럼 이어서 해 보자.');
+    msg(currentTaskReminder());
+  }else if(intent==='frustrated'){
+    msg('지금 부분이 답답했구나. 같은 말을 반복하지 않고, 필요한 도움만 줄게.');
+    msg(currentTaskReminder());
+  }
+
+  saveProgress();
+  return true;
+}
+
 function send(){
   let raw=answer.value.trim();
   if(!raw)return;
   msg(raw,'user');
   answer.value='';
+  saveProgress();
+
+  // 사과, 감사, 어려움 표현 등은 답안으로 채점하지 않고 대화로 응답한다.
+  if(handleSocialInput(raw)){
+    answer.focus();
+    return;
+  }
 
   // 추론 사고 단계: 영어 문법을 채점하지 않는다.
   if(['choose','why','whyMore','reconsider'].includes(stage)){
@@ -716,6 +938,16 @@ function send(){
     }
 
     const s=meta[revisionTarget].stage;
+
+    if(canonicalMatch(s,raw)){
+      sentences[revisionTarget]=raw.trim();
+      meta[revisionTarget].revised=true;
+      revisedCount++;
+      msg('좋아. 정확하게 수정했어.');
+      moreRevisionPrompt();
+      saveProgress();
+      return;
+    }
 
     if(okFor(s,raw)){
       // 수정 단계에서도 작은 오류를 한 번에 모두
@@ -746,6 +978,14 @@ function send(){
     msg('수정하려면 1~6 중 문장 번호를, 최종본을 만들려면 “최종완료”라고 입력해.');return;
   }
 
+  // 챗봇이 제공한 문장틀/배열의 정답을 그대로 올바르게 완성했다면 반드시 통과시킨다.
+  if(canonicalMatch(stage,raw)){
+    msg('좋아. 정확하게 완성했어. 다음 단계로 넘어갈게.');
+    advance(raw);
+    saveProgress();
+    return;
+  }
+
   // 1) 먼저 의미만 판정
   if(okFor(stage,raw)){
     // 2) 의미가 맞으면 작은 오류는 전체 문장 힌트 대신 작은 오류를 모두 지적
@@ -758,6 +998,42 @@ function send(){
     wrong(raw,stage);
   }
 }
-$('startBtn').onclick=()=>{$('start').style.display='none';$('chatScreen').style.display='flex';upd();msg('먼저 짧은 영작을 해 볼게. 이건 시험이 아니라 네가 어떤 도움을 받으면 좋은지 알아보기 위한 거야.');msg('① 다음 문장을 영어로 써 봐.\n\n“Alex는 Ben보다 키가 작다.”');answer.focus();};$('send').onclick=send;answer.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();send();}});$('help').onclick=showHelp;
+$('startBtn').onclick=()=>{
+  clearSavedProgress();
+  $('start').style.display='none';
+  $('chatScreen').style.display='flex';
+  stage='diag1';attempts=0;helpLevel=0;diagScore=0;chosen='';reasonNotes='';
+  reasons={height:false,glasses:false,hoodie:false};
+  sentences=[];meta=[];revisionTarget=-1;revisedCount=0;reviewRounds=0;
+  chat.innerHTML='';
+  $('composer').style.display='block';
+  answer.value='';
+  upd();
+  msg('먼저 짧은 영작을 해 볼게. 이건 시험이 아니라 네가 어떤 도움을 받으면 좋은지 알아보기 위한 거야.');
+  msg('① 다음 문장을 영어로 써 봐.\n\n“Alex는 Ben보다 키가 작다.”');
+  answer.focus();
+  saveProgress();
+};
+$('send').onclick=send;
+answer.addEventListener('keydown',e=>{
+  if(e.key==='Enter'){
+    e.preventDefault();
+    send();
+  }
+});
+answer.addEventListener('input',saveProgress);
+$('help').onclick=()=>{
+  showHelp();
+  saveProgress();
+};
+$('resetProgress').onclick=()=>{
+  if(confirm('현재 진행 내용을 지우고 처음부터 다시 시작할까요?')){
+    clearSavedProgress();
+    location.reload();
+  }
+};
+if(!restoreProgress()){
+  upd();
+}
 </script>
 </body></html>
